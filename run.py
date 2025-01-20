@@ -23,7 +23,7 @@ if __name__ == '__main__':
                         help='task name, options:[long_term_forecast, short_term_forecast, imputation, classification, anomaly_detection]')
     parser.add_argument('--is_training', type=int, default=1, help='status')
     parser.add_argument('--model_id', type=str, default='a800_debug', help='model id')
-    parser.add_argument('--model', type=str, default='TimesNet',
+    parser.add_argument('--model', type=str, default='ClassCNN',
                         help='model name, options: [Autoformer, Transformer, TimesNet]')  # ClassCNN   Informer
 
     # data loader
