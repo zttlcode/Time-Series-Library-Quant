@@ -4,7 +4,7 @@ import torch.nn as nn
 
 net = nn.Sequential(
             # 第一层卷积：处理输入的6个特征（每个特征是500个时间步）
-            nn.Conv2d(in_channels=6, out_channels=32, kernel_size=(1, 5), padding=(0, 2)),
+            nn.Conv2d(in_channels=7, out_channels=32, kernel_size=(1, 5), padding=(0, 2)),
             nn.ReLU(),
             nn.Dropout(0.2),  # 防止过拟合
 
@@ -24,7 +24,7 @@ net = nn.Sequential(
             nn.Flatten(),
 
             # 全连接层（Dense），进行分类
-            nn.Linear(7936, 128),  # 计算卷积和池化后的输出维度：128 * 125
+            nn.Linear(6400, 128),  # 计算卷积和池化后的输出维度：128 * 125
             nn.ReLU(),
             nn.Dropout(0.4),
 
@@ -32,7 +32,7 @@ net = nn.Sequential(
             nn.Linear(128, 4)
         )
 
-X = torch.rand(size=(16, 6, 1, 250), dtype=torch.float32)
+X = torch.rand(size=(16, 7, 1, 200), dtype=torch.float32)
 for layer in net:
     X = layer(X)
     print(layer.__class__.__name__,'output shape: \t',X.shape)
