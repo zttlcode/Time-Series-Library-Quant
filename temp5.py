@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-import ClassLSTM
+import models.ClassLSTM as ClassLSTM
 
 # 定义 LSTM 模型
 net = ClassLSTM.Model(None)
