@@ -23,12 +23,12 @@ if __name__ == '__main__':
                         help='task name, options:[long_term_forecast, short_term_forecast, imputation, classification, anomaly_detection]')
     parser.add_argument('--is_training', type=int, default=1, help='status')
     parser.add_argument('--model_id', type=str, default='a800_debug', help='model id')
-    parser.add_argument('--model', type=str, default='ClassLSTM',
+    parser.add_argument('--model', type=str, default='ClassCNN',
                         help='model name, options: [Autoformer, Transformer, TimesNet]')  # ClassCNN  ClassLSTM  Informer
 
     # data loader
     parser.add_argument('--data', type=str, default='UEA', help='dataset type')
-    parser.add_argument('--root_path', type=str, default='D:/github/RobotMeQ/QuantData/trade_point_backTest_ts/a800_200step_2wTeafeature4label3_30limit/', help='root path of the data file')
+    parser.add_argument('--root_path', type=str, default='D:/github/RobotMeQ/QuantData/trade_point_backTest_ts/a800_20step_2w_c4_trend_nature_20limit/', help='root path of the data file')
     parser.add_argument('--data_path', type=str, default='exchange_rate_pred24.csv', help='data file')
     parser.add_argument('--features', type=str, default='MS',
                         help='forecasting task, options:[M, S, MS]; M:multivariate predict multivariate, S:univariate predict univariate, MS:multivariate predict univariate')

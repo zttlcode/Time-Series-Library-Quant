@@ -9,9 +9,9 @@ class Model(nn.Module):
 
     def __init__(self, configs):
         super(Model, self).__init__()
-        self.lstm = nn.LSTM(input_size=7, hidden_size=128, num_layers=2, batch_first=True, bidirectional=True)
+        self.lstm = nn.LSTM(input_size=17, hidden_size=128, num_layers=2, batch_first=True, bidirectional=True)
         self.flatten = nn.Flatten()  # 展平所有时间步
-        self.fc1 = nn.Linear(200 * 128 * 2, 256)  # 保持 in_features=128000
+        self.fc1 = nn.Linear(5120, 256)  # 保持 in_features=128000  200 * 128 * 2
         self.relu = nn.ReLU()
         self.fc2 = nn.Linear(256, 4)
 

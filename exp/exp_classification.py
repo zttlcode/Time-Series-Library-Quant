@@ -155,14 +155,11 @@ class Exp_Classification(Exp_Basic):
         test_data, test_loader = self._get_data(flag='TEST')
         if test:
             print('loading model')
-
             # 20250118 这库没用预测代码，autoformer有，所以这里读不出文件，要改成这样，另外训练出的chekpoint和测试读的setting不一样，预测是要改
             path = os.path.join(self.args.checkpoints, setting)
             best_model_path = path + '/' + 'checkpoint.pth'
             self.model.load_state_dict(torch.load(best_model_path))
             # self.model.load_state_dict(torch.load(os.path.join('./checkpoints/' + setting, 'checkpoint.pth')))
-
-
 
         preds = []
         trues = []
@@ -192,14 +189,27 @@ class Exp_Classification(Exp_Basic):
         accuracy = cal_accuracy(predictions, trues)
 
         if test:
+            # 预测一次
             import pandas as pd
-            df = pd.DataFrame({'trues': trues, 'predictions': predictions})
+            # 用字典映射  UEAloader把ts文件中的分类转为了类别编码，这里把类别编码转回成类别名称
+            label_map = {i: name for i, name in enumerate(test_loader.dataset.class_names)}
+            # 通过 map() 转换
+            decoded_trues = list(map(label_map.get, trues))
+            decoded_predictions = list(map(label_map.get, predictions))
+
+            df = pd.DataFrame({'trues': decoded_trues, 'predictions': decoded_predictions})
             # 保存为CSV文件
-            df.to_csv('./results/output.csv', index=False)
-            # 过滤出Column1为0或2的行
-            filtered_df = df[df['trues'].isin([0, 2])]
-            # 保存到新的CSV文件
-            filtered_df.to_csv('./results/filtered_output.csv', index=False)
+            """
+603737 结束 32
+603786 结束 26
+603826 结束 8
+603858 结束 13
+            """
+            df.to_csv('./results/603858_prd_result.csv', index=False)
+            # # 过滤出Column1为0或2的行
+            # filtered_df = df[df['trues'].isin([0, 2])]
+            # # 保存到新的CSV文件
+            # filtered_df.to_csv('./results/filtered_output.csv', index=False)
 
         # result save
         folder_path = './results/' + setting + '/'
@@ -207,8 +217,8 @@ class Exp_Classification(Exp_Basic):
             os.makedirs(folder_path)
 
         print('accuracy:{}'.format(accuracy))
-        file_name='result_classification.txt'
-        f = open(os.path.join(folder_path,file_name), 'a')
+        file_name = 'result_classification.txt'
+        f = open(os.path.join(folder_path, file_name), 'a')
         f.write(setting + "  \n")
         f.write('accuracy:{}'.format(accuracy))
         f.write('\n')
