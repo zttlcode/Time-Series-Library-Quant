@@ -98,7 +98,7 @@ def check_CNN_shape():
     # 定义 LSTM 模型
     net = ClassCNN.Model(None)
 
-    X = torch.rand(size=(16, 5, 1, 20), dtype=torch.float32)
+    X = torch.rand(size=(16, 3, 1, 20), dtype=torch.float32)
 
     for layer in net.net:
         X = layer(X)

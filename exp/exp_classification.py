@@ -205,7 +205,7 @@ class Exp_Classification(Exp_Basic):
 603826 结束 8
 603858 结束 13
             """
-            df.to_csv('./results/603858_prd_result.csv', index=False)
+            df.to_csv('./results/603786_prd_result.csv', index=False)
             # # 过滤出Column1为0或2的行
             # filtered_df = df[df['trues'].isin([0, 2])]
             # # 保存到新的CSV文件

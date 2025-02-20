@@ -28,7 +28,7 @@ if __name__ == '__main__':
 
     # data loader
     parser.add_argument('--data', type=str, default='UEA', help='dataset type')
-    parser.add_argument('--root_path', type=str, default='D:/github/RobotMeQ/QuantData/trade_point_backTest_ts/a800_20step_2w_c4_trend_nature_20limit/', help='root path of the data file')
+    parser.add_argument('--root_path', type=str, default='D:/github/RobotMeQ/QuantData/trade_point_backTest_ts/a800_20step_2w_c4_oscillation_kdj_nature_20limit/', help='root path of the data file')
     parser.add_argument('--data_path', type=str, default='exchange_rate_pred24.csv', help='data file')
     parser.add_argument('--features', type=str, default='MS',
                         help='forecasting task, options:[M, S, MS]; M:multivariate predict multivariate, S:univariate predict univariate, MS:multivariate predict univariate')

@@ -14,7 +14,7 @@ class Model(nn.Module):
 
         self.net = nn.Sequential(
             # 第一层卷积：处理输入的6个特征（每个特征是500个时间步）
-            nn.Conv2d(in_channels=5, out_channels=32, kernel_size=(1, 5), padding=(0, 2)),
+            nn.Conv2d(in_channels=3, out_channels=32, kernel_size=(1, 5), padding=(0, 2)),
             nn.ReLU(),
             nn.Dropout(0.2),  # 防止过拟合
 
