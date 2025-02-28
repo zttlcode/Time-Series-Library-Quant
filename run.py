@@ -10,6 +10,7 @@ from utils.print_args import print_args
 import random
 import numpy as np
 
+
 if __name__ == '__main__':
     fix_seed = 2021
     random.seed(fix_seed)
@@ -22,13 +23,13 @@ if __name__ == '__main__':
     parser.add_argument('--task_name', type=str, default='classification',
                         help='task name, options:[long_term_forecast, short_term_forecast, imputation, classification, anomaly_detection]')
     parser.add_argument('--is_training', type=int, default=1, help='status')
-    parser.add_argument('--model_id', type=str, default='a800_debug', help='model id')
+    parser.add_argument('--model_id', type=str, default='a800_d', help='model id')
     parser.add_argument('--model', type=str, default='ClassCNN',
                         help='model name, options: [Autoformer, Transformer, TimesNet]')  # ClassCNN  ClassLSTM  Informer
 
     # data loader
     parser.add_argument('--data', type=str, default='UEA', help='dataset type')
-    parser.add_argument('--root_path', type=str, default='D:/github/RobotMeQ/QuantData/trade_point_backTest_ts/a800_20step_2w_c4_oscillation_kdj_nature_20limit/', help='root path of the data file')
+    parser.add_argument('--root_path', type=str, default='D:/github/RobotMeQ/QuantData/trade_point_backTest_ts/dataset_A_15_2w_tea_radical_nature_feature_all_True_uneven_label3_160step/', help='root path of the data file')
     parser.add_argument('--data_path', type=str, default='exchange_rate_pred24.csv', help='data file')
     parser.add_argument('--features', type=str, default='MS',
                         help='forecasting task, options:[M, S, MS]; M:multivariate predict multivariate, S:univariate predict univariate, MS:multivariate predict univariate')
@@ -38,7 +39,8 @@ if __name__ == '__main__':
     parser.add_argument('--checkpoints', type=str, default='./checkpoints/', help='location of model checkpoints')
 
     # forecasting task
-    parser.add_argument('--seq_len', type=int, default=180, help='input sequence length')
+    # seq_len 跟步长一致
+    parser.add_argument('--seq_len', type=int, default=160, help='input sequence length')
     parser.add_argument('--label_len', type=int, default=48, help='start token length')
     parser.add_argument('--pred_len', type=int, default=24, help='prediction sequence length')
     parser.add_argument('--seasonal_patterns', type=str, default='Monthly', help='subset for M4')
@@ -55,14 +57,15 @@ if __name__ == '__main__':
     parser.add_argument('--d_conv', type=int, default=4, help='conv kernel size for Mamba')
     parser.add_argument('--top_k', type=int, default=3, help='for TimesBlock')
     parser.add_argument('--num_kernels', type=int, default=6, help='for Inception')
-    parser.add_argument('--enc_in', type=int, default=6, help='encoder input size')
-    parser.add_argument('--dec_in', type=int, default=6, help='decoder input size')
+    # enc_in dec_in n_heads 跟特征数量一致，其他随意
+    parser.add_argument('--enc_in', type=int, default=17, help='encoder input size')
+    parser.add_argument('--dec_in', type=int, default=17, help='decoder input size')
     parser.add_argument('--c_out', type=int, default=1, help='output size')
-    parser.add_argument('--d_model', type=int, default=6, help='dimension of model')
-    parser.add_argument('--n_heads', type=int, default=6, help='num of heads')
+    parser.add_argument('--d_model', type=int, default=32, help='dimension of model')
+    parser.add_argument('--n_heads', type=int, default=17, help='num of heads')
     parser.add_argument('--e_layers', type=int, default=2, help='num of encoder layers')
     parser.add_argument('--d_layers', type=int, default=1, help='num of decoder layers')
-    parser.add_argument('--d_ff', type=int, default=6, help='dimension of fcn')
+    parser.add_argument('--d_ff', type=int, default=128, help='dimension of fcn')
     parser.add_argument('--moving_avg', type=int, default=25, help='window size of moving average')
     parser.add_argument('--factor', type=int, default=3, help='attn factor')
     parser.add_argument('--distil', action='store_false',
