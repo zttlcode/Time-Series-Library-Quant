@@ -151,7 +151,7 @@ class Exp_Classification(Exp_Basic):
 
         return self.model
 
-    def test(self, setting, test=0):
+    def test(self, setting, test=0, asset_code=None, pred_market=False):
         test_data, test_loader = self._get_data(flag='TEST')
         if test:
             print('loading model')
@@ -197,19 +197,26 @@ class Exp_Classification(Exp_Basic):
             decoded_trues = list(map(label_map.get, trues))
             decoded_predictions = list(map(label_map.get, predictions))
 
-            df = pd.DataFrame({'trues': decoded_trues, 'predictions': decoded_predictions})
-            # 保存为CSV文件
-            """
-603737 结束 32
-603786 结束 26
-603826 结束 8
-603858 结束 13
-            """
-            df.to_csv('./results/603786_prd_result.csv', index=False)
-            # # 过滤出Column1为0或2的行
-            # filtered_df = df[df['trues'].isin([0, 2])]
-            # # 保存到新的CSV文件
-            # filtered_df.to_csv('./results/filtered_output.csv', index=False)
+            # 手动设置开关  is trues,predictions,predictions_market?
+            if pred_market:
+                # 预测行情分类，把trues,predictions,predictions_market合并在一起
+                df = pd.read_csv('./results/'+asset_code+'_prd_result.csv')
+                df['predictions_market'] = decoded_predictions
+                df.to_csv('./results/'+asset_code+'_prd_result_tpp.csv', index=False)
+            else:
+                df = pd.DataFrame({'trues': decoded_trues, 'predictions': decoded_predictions})
+                # 保存为CSV文件
+                """
+                    603737 结束 32
+                    603786 结束 26
+                    603826 结束 8
+                    603858 结束 13
+                """
+                df.to_csv('./results/'+asset_code+'_prd_result.csv', index=False)
+                # # 过滤出Column1为0或2的行
+                # filtered_df = df[df['trues'].isin([0, 2])]
+                # # 保存到新的CSV文件
+                # filtered_df.to_csv('./results/filtered_output.csv', index=False)
 
         # result save
         folder_path = './results/' + setting + '/'
