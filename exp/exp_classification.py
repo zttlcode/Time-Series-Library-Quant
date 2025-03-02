@@ -206,12 +206,6 @@ class Exp_Classification(Exp_Basic):
             else:
                 df = pd.DataFrame({'trues': decoded_trues, 'predictions': decoded_predictions})
                 # 保存为CSV文件
-                """
-                    603737 结束 32
-                    603786 结束 26
-                    603826 结束 8
-                    603858 结束 13
-                """
                 df.to_csv('./results/'+asset_code+'_prd_result.csv', index=False)
                 # # 过滤出Column1为0或2的行
                 # filtered_df = df[df['trues'].isin([0, 2])]
