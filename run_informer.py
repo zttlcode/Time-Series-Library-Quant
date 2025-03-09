@@ -19,28 +19,28 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='TimesNet')
 
     # basic config
-    parser.add_argument('--task_name', type=str, default='classification',
+    parser.add_argument('--task_name', type=str, default='long_term_forecast',
                         help='task name, options:[long_term_forecast, short_term_forecast, imputation, classification, anomaly_detection]')
-    parser.add_argument('--is_training', type=int, default=0, help='status')
-    parser.add_argument('--model_id', type=str, default='a800_debug', help='model id')
-    parser.add_argument('--model', type=str, default='ClassCNN',
+    parser.add_argument('--is_training', type=int, default=1, help='status')
+    parser.add_argument('--model_id', type=str, default='Informer-1', help='model id')
+    parser.add_argument('--model', type=str, default='Informer',
                         help='model name, options: [Autoformer, Transformer, TimesNet]')  # ClassCNN  ClassLSTM  Informer
 
     # data loader
-    parser.add_argument('--data', type=str, default='UEA', help='dataset type')
-    parser.add_argument('--root_path', type=str, default='D:/github/RobotMeQ/QuantData/trade_point_backTest_ts/a800_20A_603786_dstep_2w_c4_oscillation_kdj_nature_20limit/', help='root path of the data file')
-    parser.add_argument('--data_path', type=str, default='exchange_rate_pred24.csv', help='data file')
+    parser.add_argument('--data', type=str, default='custom', help='dataset type')
+    parser.add_argument('--root_path', type=str, default='./data/', help='root path of the data file')
+    parser.add_argument('--data_path', type=str, default='b202212_d.csv', help='data file')
     parser.add_argument('--features', type=str, default='MS',
                         help='forecasting task, options:[M, S, MS]; M:multivariate predict multivariate, S:univariate predict univariate, MS:multivariate predict univariate')
-    parser.add_argument('--target', type=str, default='OT', help='target feature in S or MS task')
+    parser.add_argument('--target', type=str, default='MESFOC_nmile', help='target feature in S or MS task')
     parser.add_argument('--freq', type=str, default='d',
                         help='freq for time features encoding, options:[s:secondly, t:minutely, h:hourly, d:daily, b:business days, w:weekly, m:monthly], you can also use more detailed freq like 15min or 3h')
     parser.add_argument('--checkpoints', type=str, default='./checkpoints/', help='location of model checkpoints')
 
     # forecasting task
-    parser.add_argument('--seq_len', type=int, default=20, help='input sequence length')
-    parser.add_argument('--label_len', type=int, default=48, help='start token length')
-    parser.add_argument('--pred_len', type=int, default=0, help='prediction sequence length')
+    parser.add_argument('--seq_len', type=int, default=24, help='input sequence length') # 序列长度和标记长度原本是48  输入序列长度。增大这些值可能会增加模型的学习能力，但也会增加计算负担。较小的序列长度可能导致模型学习不到足够的长期依赖。
+    parser.add_argument('--label_len', type=int, default=24, help='start token length') # 和标签长度
+    parser.add_argument('--pred_len', type=int, default=24, help='prediction sequence length')
     parser.add_argument('--seasonal_patterns', type=str, default='Monthly', help='subset for M4')
     parser.add_argument('--inverse', action='store_true', help='inverse output data', default=False)
 
@@ -54,15 +54,15 @@ if __name__ == '__main__':
     parser.add_argument('--expand', type=int, default=2, help='expansion factor for Mamba')
     parser.add_argument('--d_conv', type=int, default=4, help='conv kernel size for Mamba')
     parser.add_argument('--top_k', type=int, default=3, help='for TimesBlock')
-    parser.add_argument('--num_kernels', type=int, default=6, help='for Inception')
-    parser.add_argument('--enc_in', type=int, default=6, help='encoder input size')
-    parser.add_argument('--dec_in', type=int, default=6, help='decoder input size')
+    parser.add_argument('--num_kernels', type=int, default=16, help='for Inception')
+    parser.add_argument('--enc_in', type=int, default=16, help='encoder input size')
+    parser.add_argument('--dec_in', type=int, default=16, help='decoder input size')
     parser.add_argument('--c_out', type=int, default=1, help='output size')
-    parser.add_argument('--d_model', type=int, default=6, help='dimension of model')
-    parser.add_argument('--n_heads', type=int, default=6, help='num of heads')
-    parser.add_argument('--e_layers', type=int, default=2, help='num of encoder layers')
-    parser.add_argument('--d_layers', type=int, default=1, help='num of decoder layers')
-    parser.add_argument('--d_ff', type=int, default=6, help='dimension of fcn')
+    parser.add_argument('--d_model', type=int, default=64, help='dimension of model') #原本16 模型的隐藏层维度。增加这个值可以使模型更加复杂，能够学习到更多的特征，但同时可能会增加过拟合的风险。
+    parser.add_argument('--n_heads', type=int, default=16, help='num of heads') # 注意力机制中的头数。增加头数通常能够提高模型的表达能力，尤其是在处理长时间序列时。
+    parser.add_argument('--e_layers', type=int, default=2, help='num of encoder layers') # 编码器的层数。更多的层数通常可以提高模型的学习能力，但也可能导致训练更慢和容易过拟合。
+    parser.add_argument('--d_layers', type=int, default=1, help='num of decoder layers') # 解码器的层数。
+    parser.add_argument('--d_ff', type=int, default=16, help='dimension of fcn') # 全连接层的维度。增加这个值可以使模型更加复杂，能够学习到更多的特征，但同时可能会增加过拟合的风险。
     parser.add_argument('--moving_avg', type=int, default=25, help='window size of moving average')
     parser.add_argument('--factor', type=int, default=3, help='attn factor')
     parser.add_argument('--distil', action='store_false',
@@ -88,10 +88,10 @@ if __name__ == '__main__':
     # optimization
     parser.add_argument('--num_workers', type=int, default=0, help='data loader num workers')
     parser.add_argument('--itr', type=int, default=1, help='experiments times')
-    parser.add_argument('--train_epochs', type=int, default=10, help='train epochs')
-    parser.add_argument('--batch_size', type=int, default=1, help='batch size of train input data')
-    parser.add_argument('--patience', type=int, default=10, help='early stopping patience')
-    parser.add_argument('--learning_rate', type=float, default=0.001, help='optimizer learning rate')
+    parser.add_argument('--train_epochs', type=int, default=100, help='train epochs')
+    parser.add_argument('--batch_size', type=int, default=16, help='batch size of train input data')
+    parser.add_argument('--patience', type=int, default=10, help='early stopping patience') # 早停策略的耐心值。适当的早停可以防止模型过拟合。
+    parser.add_argument('--learning_rate', type=float, default=0.001, help='optimizer learning rate') # 学习率。学习率过大会导致训练不稳定，过小则训练过慢。可以尝试不同的学习率来找到最佳的训练速度。
     parser.add_argument('--des', type=str, default='Exp', help='exp description')
     parser.add_argument('--loss', type=str, default='MSE', help='loss function')
     parser.add_argument('--lradj', type=str, default='type1', help='adjust learning rate')
@@ -109,9 +109,9 @@ if __name__ == '__main__':
     parser.add_argument('--p_hidden_layers', type=int, default=2, help='number of hidden layers in projector')
 
     # metrics (dtw)
-    parser.add_argument('--use_dtw', type=bool, default=False, 
+    parser.add_argument('--use_dtw', type=bool, default=False,
                         help='the controller of using dtw metric (dtw is time consuming, not suggested unless necessary)')
-    
+
     # Augmentation
     parser.add_argument('--augmentation_ratio', type=int, default=0, help="How many times to augment")
     parser.add_argument('--seed', type=int, default=2, help="Randomization seed")
@@ -136,7 +136,7 @@ if __name__ == '__main__':
     # args.use_gpu = True if torch.cuda.is_available() and args.use_gpu else False
     args.use_gpu = True if torch.cuda.is_available() else False
 
-    print(torch.cuda.is_available())
+    print('args', args)
 
     if args.use_gpu and args.use_multi_gpu:
         args.devices = args.devices.replace(' ', '')
@@ -190,6 +190,7 @@ if __name__ == '__main__':
 
             print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
             exp.test(setting)
+
             torch.cuda.empty_cache()
     else:
         ii = 0

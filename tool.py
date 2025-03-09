@@ -2,6 +2,41 @@ import torch
 import torch.nn as nn
 import models.ClassLSTM as ClassLSTM
 import models.ClassCNN as ClassCNN
+import models.CNN_LSTM as CNN_LSTM
+
+import pandas as pd
+from exp import exp_classification
+
+
+def check_voting():
+    allStockCode = pd.read_csv("D:/github/RobotMeQ/QuantData/asset_code/a800_stocks.csv", dtype={'code': str})
+    df_dataset = allStockCode.iloc[500:]
+    n = 1
+    for index, row in df_dataset.iterrows():
+        asset_code = row['code'][3:]
+        # 读取CSV文件
+        try:
+            df = pd.read_csv("D:/github/Time-Series-Library-Quant/results/" + asset_code + "_prd_result_tpp.csv")
+        except FileNotFoundError:
+            continue
+        # # 过滤出预测正确的行
+        # correct_df = df[df["trues"] != df["predictions"]]
+        #
+        # # 按 predictions_market 和 predictions 分组统计正确的行数
+        # correct_counts = correct_df.groupby(["predictions_market", "predictions"]).size().unstack(fill_value=0)
+        #
+        # # 输出结果
+        # print(correct_counts)
+        filtered_df = df[df['predictions'].isin([1, 3])]
+        #print(filtered_df)
+        filtered2_df = filtered_df[filtered_df["predictions"] == filtered_df["predictions_market"]]
+        #print(filtered2_df)
+        print("old",exp_classification.cal_accuracy(filtered_df["predictions"], filtered_df["trues"]))
+        print("new",exp_classification.cal_accuracy(filtered2_df["predictions"], filtered2_df["trues"]))
+
+        n += 1
+        if n > 20:
+            break
 
 
 def check_LSTM_shape():
@@ -98,7 +133,8 @@ def check_CNN_shape():
     # 定义 LSTM 模型
     net = ClassCNN.Model(None)
 
-    X = torch.rand(size=(16, 3, 1, 20), dtype=torch.float32)
+    X = torch.rand(size=(64, 17, 1, 160), dtype=torch.float32)
+    # X = torch.rand(size=(64, 17, 160), dtype=torch.float32)
 
     for layer in net.net:
         X = layer(X)
@@ -108,3 +144,15 @@ def check_CNN_shape():
 if __name__ == '__main__':
     # check_LSTM_shape()
     check_CNN_shape()
+    # check_voting()
+    # 当前级别
+    # 有效买入,上涨\震荡 行情,可信  下跌行情否决    3猜错的最多,否决   结论,上涨行情可信,其余否决
+    # 有效卖出,下跌     行情,可行  其他行情否决    3猜错的最少       结论,下跌行情可信
+
+    # d级别
+    # 有效买入,
+    # 有效卖出,上涨 可行
+
+    # index d级别
+    # 有效买入,
+    # 有效卖出,上涨 可行

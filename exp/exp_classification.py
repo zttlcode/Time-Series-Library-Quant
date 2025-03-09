@@ -192,6 +192,10 @@ class Exp_Classification(Exp_Basic):
             # 预测一次
             import pandas as pd
             # 用字典映射  UEAloader把ts文件中的分类转为了类别编码，这里把类别编码转回成类别名称
+            if pred_market:
+                test_loader.dataset.class_names = ["1", "2", "3"]
+            else:
+                test_loader.dataset.class_names = ["1", "2", "3", "4"]
             label_map = {i: name for i, name in enumerate(test_loader.dataset.class_names)}
             # 通过 map() 转换
             decoded_trues = list(map(label_map.get, trues))

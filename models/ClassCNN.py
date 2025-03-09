@@ -13,8 +13,8 @@ class Model(nn.Module):
         super(Model, self).__init__()
 
         self.net = nn.Sequential(
-            # 第一层卷积：处理输入的6个特征（每个特征是500个时间步）
-            nn.Conv2d(in_channels=3, out_channels=32, kernel_size=(1, 5), padding=(0, 2)),
+            # 第一层卷积：处理输入的17个特征（每个特征是500个时间步）
+            nn.Conv2d(in_channels=17, out_channels=32, kernel_size=(1, 5), padding=(0, 2)),
             nn.ReLU(),
             nn.Dropout(0.2),  # 防止过拟合
 
@@ -34,7 +34,7 @@ class Model(nn.Module):
             nn.Flatten(),
 
             # 全连接层（Dense），进行分类
-            nn.Linear(640, 128),  # 计算卷积和池化后的输出维度：128 * 125
+            nn.Linear(5120, 128),  # 计算卷积和池化后的输出维度：128 * 125
             nn.ReLU(),
             nn.Dropout(0.4),
 
