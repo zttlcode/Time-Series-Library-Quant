@@ -672,16 +672,16 @@ if __name__ == '__main__':
                                "c4_trend_nature", "feature_all",
                                "point_to_ts1", "_label1")
     """
-    name = 'A_15'
+    name = 'A_d'
     time_point_step = '160'
     handle_uneven_samples = 'True'
     strategy_name = 'tea_radical_nature'
     feature_plan_name = 'feature_all'
-    label_name = '_label3'
+    label_name = '_label2'
 
     problem_name_str = ("dataset_" + name + "_" + str(strategy_name) + "_" + str(feature_plan_name) + "_" +
                         str(handle_uneven_samples) + "_uneven" + str(label_name) + "_" + str(time_point_step) + "step")
-    model_id = 'A_15_tea2'  # 区别不同训练系数  a800_60_market  A_15_tea  A_d_pred
+    model_id = 'A_d_tea3'  # 区别不同训练系数  a800_60_market  A_15_tea  A_d_pred
     run_train(problem_name_str, model_id)
 
     """
