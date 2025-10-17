@@ -60,6 +60,8 @@ class Exp_Classification(Exp_Basic):
 
                 pred = outputs.detach().cpu()
                 loss = criterion(pred, label.long().squeeze().cpu())
+                # 报错用下面的ValueError: Expected input batch_size (1) to match target batch_size (0).
+                # loss = criterion(pred, label.long().squeeze(-1).cpu())
                 total_loss.append(loss)
 
                 preds.append(outputs.detach())

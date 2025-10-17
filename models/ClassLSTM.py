@@ -11,11 +11,15 @@ class Model(nn.Module):
         super(Model, self).__init__()
         self.lstm = nn.LSTM(input_size=17, hidden_size=128, num_layers=2, batch_first=True, bidirectional=True)
         self.flatten = nn.Flatten()  # 展平所有时间步
-        self.fc1 = nn.Linear(5120, 256)  # 保持 in_features=128000  200 * 128 * 2
+        self.fc1 = nn.Linear(40960, 256)  # 保持 in_features=128000  200 * 128 * 2
         self.relu = nn.ReLU()
-        self.fc2 = nn.Linear(256, 4)
+        self.fc2 = nn.Linear(256, 2)
 
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask=None):
+        """
+        画图时，删除   , x_mark_enc, x_dec, x_mark_dec, mask=None
+        注释x_enc下面的前3个
+        """
         x_enc = x_enc.permute(0, 2, 1)
         x_enc = x_enc.unsqueeze(2)  # 结果是 (16, 6, 1, 10)
         x_enc = x_enc.squeeze(2).permute(0, 2, 1)  # 变成 (batch_size=16, time_steps=500, features=6)

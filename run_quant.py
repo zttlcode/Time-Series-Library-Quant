@@ -26,8 +26,8 @@ def run_train(train_set_filepath, model_id):
                         help='task name, options:[long_term_forecast, short_term_forecast, imputation, classification, anomaly_detection]')
     parser.add_argument('--is_training', type=int, default=1, help='status')
     parser.add_argument('--model_id', type=str, default=model_id, help='model id')
-    parser.add_argument('--model', type=str, default='ClassCNN',
-                        help='model name, options: [Autoformer, Transformer, TimesNet]')  # ClassCNN  ClassLSTM  Informer
+    parser.add_argument('--model', type=str, default='ClassLSTM',
+                        help='model name, options: [Autoformer, Transformer, TimesNet]')  # ClassCNN  ClassLSTM  Informer Nonstationary_Transformer
 
     # data loader
     parser.add_argument('--data', type=str, default='UEA', help='dataset type')
@@ -95,8 +95,8 @@ def run_train(train_set_filepath, model_id):
     # optimization
     parser.add_argument('--num_workers', type=int, default=0, help='data loader num workers')
     parser.add_argument('--itr', type=int, default=1, help='experiments times')
-    parser.add_argument('--train_epochs', type=int, default=50, help='train epochs')
-    parser.add_argument('--batch_size', type=int, default=64, help='batch size of train input data')
+    parser.add_argument('--train_epochs', type=int, default=100, help='train epochs')
+    parser.add_argument('--batch_size', type=int, default=128, help='batch size of train input data')
     parser.add_argument('--patience', type=int, default=10, help='early stopping patience')
     parser.add_argument('--learning_rate', type=float, default=0.001, help='optimizer learning rate')
     parser.add_argument('--des', type=str, default='Exp', help='exp description')
@@ -245,7 +245,7 @@ def run_predict(pred_set_filepath, model_id, time_point_step, asset_code, pred_m
                         help='task name, options:[long_term_forecast, short_term_forecast, imputation, classification, anomaly_detection]')
     parser.add_argument('--is_training', type=int, default=0, help='status')
     parser.add_argument('--model_id', type=str, default=model_id, help='model id')
-    parser.add_argument('--model', type=str, default='ClassCNN',
+    parser.add_argument('--model', type=str, default='ClassLSTM',
                         help='model name, options: [Autoformer, Transformer, TimesNet]')  # ClassCNN  ClassLSTM  Informer
 
     # data loader
@@ -672,18 +672,30 @@ if __name__ == '__main__':
                                "c4_trend_nature", "feature_all",
                                "point_to_ts1", "_label1")
     """
-    name = 'A_d'
+    name = 'A_15'
     time_point_step = '160'
     handle_uneven_samples = 'True'
-    strategy_name = 'tea_radical_nature'
+    strategy_name = 'fuzzy_nature'
     feature_plan_name = 'feature_all'
-    label_name = '_label2'
+    label_name = '_label1'
 
-    problem_name_str = ("dataset_" + name + "_" + str(strategy_name) + "_" + str(feature_plan_name) + "_" +
-                        str(handle_uneven_samples) + "_uneven" + str(label_name) + "_" + str(time_point_step) + "step")
-    model_id = 'A_d_tea3'  # 区别不同训练系数  a800_60_market  A_15_tea  A_d_pred
+    classification = 2
+    classification_direction = 'buy'
+
+    model_id = name + '_ClassLSTM_' + strategy_name  # 区别不同训练系数  a800_60_market  A_15_tea  A_d_pred
+
+    # 训练模型
+    if classification == 2:
+        problem_name_str = ("dataset_" + name + "_" + str(strategy_name) + "_" + str(feature_plan_name) + "_" +
+                            str(handle_uneven_samples) + "_uneven" +
+                            str(label_name) + "_" + str(time_point_step) + "step" +
+                            "_" + str(classification) + "_class_" + str(classification_direction))
+    else:
+        problem_name_str = ("dataset_" + name + "_" + str(strategy_name) + "_" + str(feature_plan_name) + "_" +
+                            str(handle_uneven_samples) + "_uneven" +
+                            str(label_name) + "_" + str(time_point_step) + "step")
+
     run_train(problem_name_str, model_id)
-
     """
     预测交易点/行情
     RMQDataset.prepare_dataset_single("_TEST", "A_30", 20,
@@ -692,14 +704,8 @@ if __name__ == '__main__':
                                       "point_to_ts_up_time_level", "_label1", 3,
                                       True, '60')                              
     """
-    name = 'A_15'
-    time_point_step = '160'  # 预测行情 20
-    handle_uneven_samples = 'True'
-    strategy_name = 'tea_radical_nature'
-    feature_plan_name = 'feature_all'
-    label_name = '_label3'
-    pred_market_type = False  # 预测行情 True 是3分类预测行情  False 是4分类预测交易点
-
+    # pred_market_type = False  # 预测行情 True 是3分类预测行情  False 是4分类预测交易点
+    # #" + str(strategy_name) + "
     # allStockCode = pd.read_csv("D:/github/RobotMeQ/QuantData/asset_code/a800_stocks.csv", dtype={'code': str})
     # df_dataset = allStockCode.iloc[500:]
     # n = 1
@@ -708,7 +714,7 @@ if __name__ == '__main__':
     #     problem_name_str = ("pred_" + str(pred_market_type) + "_" + name + "_"
     #                         + name[0:1] + "_"
     #                         + asset_code + "_" + name[2:]
-    #                         + "_" + str(strategy_name) + "_" + str(feature_plan_name) + "_"
+    #                         + "_boll_" + str(feature_plan_name) + "_"
     #                         + str(handle_uneven_samples) + "_uneven" + str(label_name) + "_"
     #                         + str(time_point_step) + "step")
     #     try:
@@ -720,6 +726,7 @@ if __name__ == '__main__':
     #     if n > 20:
     #         break
 
+    # 每天实盘预测
     # tdxList = ['510050', '159915', '510300', '563300', '588000', '512690', '515030', '515790', '516970', '512660',
     #            '159611', '512170', '512800', '515220', '159766', '159865', '159996', '512480', '159819', '562500',
     #            '159869', '515880', '159985', '159980', '159981', '513360', '518880', '159920', '513130', '513060',

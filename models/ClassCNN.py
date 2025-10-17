@@ -39,11 +39,12 @@ class Model(nn.Module):
             nn.Dropout(0.4),
 
             # 输出层，4个类别（有效买点、无效买点、有效卖点、无效卖点）
-            nn.Linear(128, 4)
+            nn.Linear(128, 2)
         )
 
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask=None):
         """
+        , x_mark_enc, x_dec, x_mark_dec, mask=None
         # 假设原始数据形状是 (16, 10, 6)，表示 batch_size=16，10 个时间步，6 个特征
         x = torch.rand(16, 10, 6)  # (batch_size, time_steps, features)
 
@@ -55,6 +56,8 @@ class Model(nn.Module):
 
         # 查看结果
         print(x.shape)  # 输出形状 (16, 6, 1, 10)
+
+        画图时，x_enc这两行要注释，入参也只剩x_enc
         """
         x_enc = x_enc.permute(0, 2, 1)
         x_enc = x_enc.unsqueeze(2)  # 结果是 (16, 6, 1, 10)

@@ -44,7 +44,7 @@ def check_LSTM_shape():
     net = ClassLSTM.Model(None)
 
     # 生成随机输入数据
-    x = torch.randn(16, 17, 1, 20)  # (batch_size=16, features=6, channels=1, time_steps=500)
+    x = torch.randn(16, 17, 1, 160)  # (batch_size=16, features=6, channels=1, time_steps=500)
     x = x.squeeze(2).permute(0, 2, 1)  # 变成 (batch_size=16, time_steps=500, features=6)
 
     # **遍历每一层，查看形状**
@@ -141,7 +141,32 @@ def check_CNN_shape():
         print(layer.__class__.__name__, 'output shape: \t', X.shape)
 
 
+def draw_CNN():
+    # 定义 CNN 模型
+    net = ClassCNN.Model(None)
+
+    X = torch.rand(size=(1, 17, 1, 160), dtype=torch.float32)
+    # 导出为 ONNX 文件
+    torch.onnx.export(net, X, "cnn_model.onnx",
+                      input_names=["input"], output_names=["output"],
+                      dynamic_axes={"input": {0: "batch_size"}, "output": {0: "batch_size"}},
+                      opset_version=11)# 导出为 ONNX 文件
+
+def draw_LSTM():
+    # 定义 CNN 模型
+    net = ClassLSTM.Model(None)
+
+    X = torch.rand(size=(1, 160, 17), dtype=torch.float32)
+    # 导出为 ONNX 文件
+    torch.onnx.export(net, X, "lstm_model.onnx",
+                      input_names=["input"], output_names=["output"],
+                      dynamic_axes={"input": {0: "batch_size"}, "output": {0: "batch_size"}},
+                      opset_version=11)# 导出为 ONNX 文件
+
+
 if __name__ == '__main__':
+    # draw_CNN()
+    # draw_LSTM()
     # check_LSTM_shape()
     check_CNN_shape()
     # check_voting()
