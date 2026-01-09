@@ -39,7 +39,7 @@ class Model(nn.Module):
             nn.Dropout(0.4),
 
             # 输出层，4个类别（有效买点、无效买点、有效卖点、无效卖点）
-            nn.Linear(128, 2)
+            nn.Linear(128, 4)
         )
 
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask=None):

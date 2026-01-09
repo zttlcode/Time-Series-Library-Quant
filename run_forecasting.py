@@ -19,21 +19,26 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='TimesNet')
 
     # basic config
+    # 选择任务类型
     parser.add_argument('--task_name', type=str, default='long_term_forecast',
                         help='task name, options:[long_term_forecast, short_term_forecast, imputation, classification, anomaly_detection]')
+    # 预测模式时，这里填0，但这个库没预测代码，GitHub的patchTST库有
     parser.add_argument('--is_training', type=int, default=1, help='status')
-    parser.add_argument('--model_id', type=str, default='backtest_bar_000001_d_informer', help='model id')
-    parser.add_argument('--model', type=str, default='Informer',
+    parser.add_argument('--model_id', type=str, default='test', help='model id')
+    parser.add_argument('--model', type=str, default='PatchTST',
                         help='model name, options: [Autoformer, Transformer, TimesNet]')  # ClassCNN  ClassLSTM  Informer
 
     # data loader
-    parser.add_argument('--data', type=str, default='custom', help='dataset type')
-    parser.add_argument('--root_path', type=str, default='D:/github/dataset/', help='root path of the data file')
-    parser.add_argument('--data_path', type=str, default='backtest_bar_000001_d.csv', help='data file')
+    parser.add_argument('--data', type=str, default='custom', help='dataset type')  # 时序的就用自定义的
+    # 训练文件的目录，以及文件名
+    parser.add_argument('--root_path', type=str, default='D:/github/RobotMeQ_Dataset/dataset/', help='root path of the data file')
+    parser.add_argument('--data_path', type=str, default='backtest_bar_600332_30_pred24.csv', help='data file')
+    # 预测的形式
     parser.add_argument('--features', type=str, default='MS',
                         help='forecasting task, options:[M, S, MS]; M:multivariate predict multivariate, S:univariate predict univariate, MS:multivariate predict univariate')
     parser.add_argument('--target', type=str, default='OT', help='target feature in S or MS task')
-    parser.add_argument('--freq', type=str, default='d',
+    # 时间频率
+    parser.add_argument('--freq', type=str, default='t',
                         help='freq for time features encoding, options:[s:secondly, t:minutely, h:hourly, d:daily, b:business days, w:weekly, m:monthly], you can also use more detailed freq like 15min or 3h')
     parser.add_argument('--checkpoints', type=str, default='./checkpoints/', help='location of model checkpoints')
 
@@ -193,7 +198,6 @@ if __name__ == '__main__':
 
             print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
             exp.test(setting)
-
             torch.cuda.empty_cache()
     else:
         ii = 0

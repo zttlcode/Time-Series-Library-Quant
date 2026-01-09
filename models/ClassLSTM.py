@@ -13,7 +13,7 @@ class Model(nn.Module):
         self.flatten = nn.Flatten()  # 展平所有时间步
         self.fc1 = nn.Linear(40960, 256)  # 保持 in_features=128000  200 * 128 * 2
         self.relu = nn.ReLU()
-        self.fc2 = nn.Linear(256, 2)
+        self.fc2 = nn.Linear(256, 4)
 
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask=None):
         """

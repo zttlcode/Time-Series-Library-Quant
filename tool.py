@@ -141,43 +141,7 @@ def check_CNN_shape():
         print(layer.__class__.__name__, 'output shape: \t', X.shape)
 
 
-def draw_CNN():
-    # 定义 CNN 模型
-    net = ClassCNN.Model(None)
-
-    X = torch.rand(size=(1, 17, 1, 160), dtype=torch.float32)
-    # 导出为 ONNX 文件
-    torch.onnx.export(net, X, "cnn_model.onnx",
-                      input_names=["input"], output_names=["output"],
-                      dynamic_axes={"input": {0: "batch_size"}, "output": {0: "batch_size"}},
-                      opset_version=11)# 导出为 ONNX 文件
-
-def draw_LSTM():
-    # 定义 CNN 模型
-    net = ClassLSTM.Model(None)
-
-    X = torch.rand(size=(1, 160, 17), dtype=torch.float32)
-    # 导出为 ONNX 文件
-    torch.onnx.export(net, X, "lstm_model.onnx",
-                      input_names=["input"], output_names=["output"],
-                      dynamic_axes={"input": {0: "batch_size"}, "output": {0: "batch_size"}},
-                      opset_version=11)# 导出为 ONNX 文件
-
-
 if __name__ == '__main__':
-    # draw_CNN()
-    # draw_LSTM()
-    # check_LSTM_shape()
-    check_CNN_shape()
+    check_LSTM_shape()
+    # check_CNN_shape()
     # check_voting()
-    # 当前级别
-    # 有效买入,上涨\震荡 行情,可信  下跌行情否决    3猜错的最多,否决   结论,上涨行情可信,其余否决
-    # 有效卖出,下跌     行情,可行  其他行情否决    3猜错的最少       结论,下跌行情可信
-
-    # d级别
-    # 有效买入,
-    # 有效卖出,上涨 可行
-
-    # index d级别
-    # 有效买入,
-    # 有效卖出,上涨 可行

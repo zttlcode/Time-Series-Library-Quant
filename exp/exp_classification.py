@@ -157,7 +157,7 @@ class Exp_Classification(Exp_Basic):
         test_data, test_loader = self._get_data(flag='TEST')
         if test:
             print('loading model')
-            # 20250118 这库没用预测代码，autoformer有，所以这里读不出文件，要改成这样，另外训练出的chekpoint和测试读的setting不一样，预测是要改
+            # 20250118 这库没用预测代码，autoformer有，所以这里读不出文件，要改成这样，另外训练出的chekpoint和测试读的setting不一样，预测时要改
             path = os.path.join(self.args.checkpoints, setting)
             best_model_path = path + '/' + 'checkpoint.pth'
             self.model.load_state_dict(torch.load(best_model_path))
