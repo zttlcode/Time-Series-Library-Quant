@@ -48,7 +48,7 @@ class Config:
     n_heads = 8  # 多头注意力的头数
     proj_dim = 128  # 对比学习投影头输出维度
     quantiles = [0.1, 0.5, 0.9]  # 分位数回归的分位点
-    use_taa = False  # 是否启用尾部感知注意力模块
+    use_taa = True  # 是否启用尾部感知注意力模块
     lam_init = 0.1  # TAA中可学习缩放参数λ的初始值
     tau_cl = 0.1  # InfoNCE损失的温度系数
     # 多任务损失权重
@@ -378,6 +378,8 @@ class SignalDataset(Dataset):
                and not np.isnan(self.labels_D[i])
                and not np.isnan(self.labels_xi[i])
         ]
+        # 新增：记录每个有效信号点的交易类型
+        self.signal_types = [self.df['signal'].iloc[i] for i in self.signal_indices]
 
     def __len__(self):
         """返回有效信号点的数量"""
@@ -394,17 +396,21 @@ class SignalDataset(Dataset):
         abs_ret = self.df['abs_returns'].values[i - self.window:i]
 
         # 正样本窗口：未来第一个极值点前后各contrastive_win天的环境窗口
-
-        # 若未来窗口内未找到极值点，用全零张量占位（实际训练中会被掩盖或忽略）
         pos_win = np.zeros((2 * self.cfg.contrastive_win + 1, self.features.shape[1]), dtype=np.float32)
         future_end = min(len(self.df), i + cfg.future_T + 1)
+        # 获取当前信号的类型
+        sig_type = self.signal_types[idx]
+
         for j in range(i + 1, future_end):
-            if j in self.extrema_idx_set:  # 找到第一个结构性极值点
-                start = max(0, j - cfg.contrastive_win)
-                end = min(len(self.df), j + cfg.contrastive_win + 1)
-                # 得益于筛选条件，这里 start:end 长度必定 >= 2*contrastive_win+1
-                pos_win = self.features[start:end]  # 如果仍想安全，可做一次裁剪/填充
-                break
+            if j in self.extrema_idx_set:
+                P_ext = self.df['close'].iloc[j]
+                P_s = self.df['close'].iloc[i]
+                # 方向判断：买入信号只接受未来更高的极值点，卖出信号只接受未来更低的极值点
+                if (sig_type == 'buy' and P_ext > P_s) or (sig_type == 'sell' and P_ext < P_s):
+                    start = max(0, j - cfg.contrastive_win)
+                    end = min(len(self.df), j + cfg.contrastive_win + 1)
+                    pos_win = self.features[start:end]
+                    break
 
         # 负样本窗口（随机远离极值点的区域） （保证长度固定）
         neg_win = np.zeros_like(pos_win)
@@ -584,7 +590,15 @@ def train_epoch(model, dataloader, optimizer, cfg):
         h_pos_seq = model.encoder(pos_win)      # 序列
         h_pos = h_pos_seq[:, -1, :]
         proj_pos = model.proj_head(h_pos)
-        loss_cl = info_nce(proj_anchor, proj_pos, cfg.tau_cl)
+
+        # 过滤掉正样本为全零的无效样本（未找到同向极值点）
+        pos_valid_mask = pos_win.reshape(pos_win.size(0), -1).abs().sum(dim=1) > 1e-8
+        if pos_valid_mask.sum() > 1:
+            proj_anchor_valid = proj_anchor[pos_valid_mask]
+            proj_pos_valid = proj_pos[pos_valid_mask]
+            loss_cl = info_nce(proj_anchor_valid, proj_pos_valid, cfg.tau_cl)
+        else:
+            loss_cl = torch.tensor(0.0, device=pos_win.device)
 
         loss = cfg.lambda_D * loss_D + cfg.lambda_xi * loss_xi + cfg.lambda_cl * loss_cl
         optimizer.zero_grad()

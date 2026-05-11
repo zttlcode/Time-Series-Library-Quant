@@ -1,0 +1,121 @@
+我来为你设计一个**可自动运行的消融实验方案**，只改动必要的代码，并在一个脚本中依次跑完 A0 至 A7，最后输出汇总表格。
+
+整个方案的核心思路是：**在 `Config` 中增加一个 `ablation` 字符串，标注函数、模型构造、训练损失三处根据该变量做条件分支，其余代码保持不变。**
+
+---
+
+## 一、消融矩阵与每个变体的改动点
+
+| 编号 | 消去项 | Config 设置 | 标注函数变更 | 模型/训练变更 |
+|------|--------|-------------|--------------|---------------|
+| A0 | 无（全模型） | `ablation = "full"` | 当前方向感知标签 | 全部开启 |
+| A1 | w/o EVT (GPD) | `ablation = "no_evt"` | 极值点识别仅用 95% 分位，ξ 标签置 -1e9（缺失），不拟合 GPD | 无额外变更（ξ 损失因标签缺失自动为 0） |
+| A2 | w/o contrastive | `ablation = "no_cl"` | 标签不变 | 训练中去掉对比损失（λ_cl = 0 或删除计算） |
+| A3 | w/o ξ head | `ablation = "no_xi"` | 标签不变 | 模型去掉 `head_xi`，损失中去掉 ξ 项 |
+| A4 | w/o Tail‑Aware Attention | `ablation = "no_taa"` | 标签不变 | `use_taa=False` |
+| A5 | w/o quantile | `ablation = "no_quantile"` | 标签不变 | 分位数头改为单输出 + Huber 损失 |
+| A6 | 替换为 Triple Barrier 分类标签 | `ablation = "triple_barrier"` | 改用三重障碍法生成二分类标签（0/1） | 模型改为分类头（Sigmoid + BCE），去掉对比学习 |
+| A7 | 替换为固定阈值极值标签 | `ablation = "fixed_extrema"` | 极值点改用 `find_peaks` 固定参数，标签 D 仍按距离计算，ξ 置缺失 | 同 A0 |
+
+---
+
+## 二、代码修改步骤
+
+### 1. 在 `Config` 类中添加消融配置
+```python
+class Config:
+    def __init__(self):
+        self.ablation = "full"   # "full", "no_evt", "no_cl", "no_xi", "no_taa", "no_quantile", "triple_barrier", "fixed_extrema"
+```
+并在文件底部把原来的 `cfg = Config()` 实例化放在 `main` 内，因为现在需要根据不同消融动态创建。
+
+### 2. 修改标注函数 `compute_evt_distance_xi`
+在函数开头根据 `cfg.ablation` 调整行为。
+
+**A1 (no_evt) / A7 (fixed_extrema)** 的极值点识别：
+```python
+if cfg.ablation == "no_evt":
+    # 直接用滚动95%分位识别极端事件，但不再拟合 GPD
+    xi_series = np.full(n, -1e9)   # 表示缺失
+    sigma_series = np.full(n, 1.0)
+elif cfg.ablation == "fixed_extrema":
+    # 用 find_peaks 找所有局部极值点（忽略EVT）
+    peak_idx, _ = find_peaks(df['close'].values, prominence=0.05*df['close'].std())
+    valley_idx, _ = find_peaks(-df['close'].values, prominence=0.05*df['close'].std())
+    extrema_idx_set = set(peak_idx) | set(valley_idx)
+    # 跳过原本基于 extreme_mask 的极值点构建，直接使用此集合
+```
+
+**A6 (triple_barrier)** 的标签构造：
+不生成 D 和 ξ，而是调用新函数 `compute_triple_barrier_label(df, cfg)`，它根据固定障碍（例如 40 天涨 10% 止盈，-10% 止损）为每个信号打标签 0/1。
+`D_labels` 可替换为 `barrier_labels`，`xi_labels` 仍置为缺失。
+
+### 3. 修改模型构造和训练损失
+
+**A3 (no_xi)：**
+`CTAML` 中不创建 `self.head_xi`，forward 中不输出 `xi_out`。训练循环中跳过 `loss_xi` 计算。
+
+**A5 (no_quantile)：**
+`QuantileHead` 改为 `nn.Linear(d_model, 1)`，用 Huber 损失替代 pinball。
+`D_hat` 的 shape 变为 `(B, 1)`，预测值经过 Sigmoid。
+
+**A2 (no_cl)：**
+在 `train_epoch` 中根据 `cfg.ablation == "no_cl"` 不计算对比损失，`lambda_cl` 置 0。
+
+**A6 (triple_barrier)：**
+模型头改为分类头（单输出 sigmoid + BCE 损失），不需要对比学习。训练循环改为简单分类损失。
+
+这些修改在 `CTAML` 的 `__init__` 和 `forward` 中通过 if 判断即可。
+
+### 4. 训练/回测循环不变
+你的 `train_epoch` 和 `apply_filter_and_trade` 基本可以复用，只需确保根据消融模式跳过某些损失项。
+
+---
+
+## 三、自动运行脚本
+
+创建一个新的主运行函数 `run_ablation_experiments()`：
+
+```python
+def run_ablation_experiments():
+    ablation_list = ["full", "no_evt", "no_cl", "no_xi", "no_taa", "no_quantile", "triple_barrier", "fixed_extrema"]
+    results_summary = []
+    for ablation in ablation_list:
+        print(f"\n===== 运行消融实验: {ablation} =====")
+        cfg = Config()  # 每次新建实例
+        cfg.ablation = ablation
+        # 可能会关闭其他无关功能，如 triple_barrier 下 use_taa=False
+        if ablation == "triple_barrier":
+            cfg.use_taa = False
+            cfg.lambda_cl = 0.0
+            cfg.lambda_xi = 0.0
+
+        # 调用修改后的 main()（需要让 main 接受一个 cfg 参数，或把 main 内容移入此循环）
+        # 假设你重构 main 为 def run_one_config(cfg):
+        summary = run_one_config(cfg)  # 返回该消融下的指标（夏普、MDD等）
+        results_summary.append(summary)
+
+    # 汇总成 DataFrame 并保存
+    df_summary = pd.DataFrame(results_summary)
+    df_summary.to_csv("ablation_results.csv", index=False)
+    print(df_summary)
+```
+
+你需要将原来的 `main()` 函数改为 `run_one_config(cfg)`，其内部流程不变，但在创建模型和加载标注时根据 `cfg.ablation` 做分支。
+
+---
+
+## 四、预期输出
+
+最终你会得到一张表格，每一行对应一个消融配置，列包括：消融编号、过滤后夏普、最大回撤、相比基线的提升等。可以再用 bar plot 可视化。
+
+---
+
+## 五、实施建议
+
+1. **优先实现 A0、A2、A3、A4、A5**，因为它们只涉及模型/训练微调，不需要重新标注数据，最容易快速跑通。
+2. **A1、A7 需要修改极值点识别**，但 D 标签计算逻辑可以复用。
+3. **A6 工作量最大**，需要额外实现三重障碍标注和分类训练。可以先由简单方案替代（如用固定障碍生成 0/1 标签，用 XGBoost 作为分类器，不作为深度学习消融的一部分），论文中也可以说明“用 XGBoost 替代 CTAML 分类头”作为基准。
+4. 所有实验务必在单股票（如 AES）上先跑，验证无误后再扩展到多股票。
+
+这个方案让你可以**一键运行全部消融实验**，代码改动条理清晰，且复用了现有框架。需要我提供某一部分的具体代码实现吗？
