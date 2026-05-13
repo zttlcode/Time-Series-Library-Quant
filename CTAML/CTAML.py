@@ -125,6 +125,8 @@ def load_and_prepare(signal_path, ohlcv_path):
     df['pct_chg'] = df['close'].pct_change()
     df['vol_chg'] = df['volume'].pct_change()
 
+    # 将无穷值替换为 NaN，避免后续 StandardScaler 报错
+    df.replace([np.inf, -np.inf], np.nan, inplace=True)
     # 删除含有NaN的行（由rolling计算产生）
     df.dropna(inplace=True)
 
@@ -267,6 +269,7 @@ def compute_evt_distance_xi(df, cfg):
     signal_times = df[df['signal'] != 'none'].index
     for t_s in signal_times:
         idx_s = df.index.get_loc(t_s)
+        signal_type = df['signal'].loc[t_s]  # 获取信号类型
         # 搜索未来窗口内的极值点（按 bar 数）
         future_end = min(n, idx_s + cfg.future_T + 1)
         min_dist = 1.0  # 默认最差质量
@@ -290,27 +293,40 @@ def compute_evt_distance_xi(df, cfg):
             if idx_t in extrema_idx_set:  # extrema_idx_set 是极值点的位置集合
                 P_ext = df['close'].iloc[idx_t]
                 P_s = df['close'].iloc[idx_s]
-                atr_s = df['atr'].iloc[idx_s]  # 信号点处的ATR
-                time_diff = idx_t - idx_s  # 时间差用 bar 数
-                price_diff = abs(P_ext - P_s)
-                # 归一化时空距离，对应论文公式(1)
-                """
-                时间维度	(time_diff / future_T)²	信号到极值点的时间成本	将时间压缩到 [0,1]：第1天到达=0.1，第10天到达=1.0（假设 future_T=10）
-                价格维度	(price_diff / (kappa * atr_s))²	信号到极值点的价格空间（用ATR标准化波动率）	ATR 是动态波动率指标，kappa（通常=2~3）确保价格项与时间项量级相当
-                
-                为什么用 ATR 而非固定价格阈值？
-                    固定阈值问题：10元股跌1元=10%，100元股跌1元=1% → 无法跨品种比较。
-                    ATR 解决方案：
-                    price_diff / (kappa * atr_s) = 价格变动占当前波动率的比例
-                    例：ATR=2元时，价格变动4元 = 2倍ATR（高波动环境中的显著变动）
-                    例：ATR=0.5元时，价格变动4元 = 8倍ATR（极端事件，需重点关注）
-                
-                为什么用 欧氏距离而非简单加权？
-                    几何意义：将“时间-价格”视为二维平面，距离越短代表信号越高效。
-                """
-                dist = np.sqrt((time_diff / cfg.future_T) ** 2 + (price_diff / (cfg.kappa * atr_s)) ** 2)
-                min_dist = min(min_dist, dist)
-                break  # 只取第一个极值点
+                # 判断极值点方向：peak 还是 valley
+                # 我们根据产生该极值点的原始极端事件方向来判断
+                # 但 extrema_idx_set 没有存储方向，需要额外记录
+                # 简便办法：直接比较 P_ext 与 P_s
+                if signal_type == 'buy' and P_ext > P_s:  # 只接受上涨的 peak
+                    # 计算 D
+                    atr_s = df['atr'].iloc[idx_s]
+                    time_diff = idx_t - idx_s
+                    price_diff = P_ext - P_s  # 注意不要用 abs，保证正向
+                    # 归一化时空距离，对应论文公式(1)
+                    """
+                    时间维度	(time_diff / future_T)²	信号到极值点的时间成本	将时间压缩到 [0,1]：第1天到达=0.1，第10天到达=1.0（假设 future_T=10）
+                    价格维度	(price_diff / (kappa * atr_s))²	信号到极值点的价格空间（用ATR标准化波动率）	ATR 是动态波动率指标，kappa（通常=2~3）确保价格项与时间项量级相当
+
+                    为什么用 ATR 而非固定价格阈值？
+                        固定阈值问题：10元股跌1元=10%，100元股跌1元=1% → 无法跨品种比较。
+                        ATR 解决方案：
+                        price_diff / (kappa * atr_s) = 价格变动占当前波动率的比例
+                        例：ATR=2元时，价格变动4元 = 2倍ATR（高波动环境中的显著变动）
+                        例：ATR=0.5元时，价格变动4元 = 8倍ATR（极端事件，需重点关注）
+
+                    为什么用 欧氏距离而非简单加权？
+                        几何意义：将“时间-价格”视为二维平面，距离越短代表信号越高效。
+                    """
+                    dist = np.sqrt((time_diff / cfg.future_T) ** 2 + (price_diff / (cfg.kappa * atr_s)) ** 2)
+                    min_dist = min(min_dist, dist)
+                    break  # 只取第一个符合条件的
+                elif signal_type == 'sell' and P_ext < P_s:  # 只接受下跌的 valley
+                    atr_s = df['atr'].iloc[idx_s]
+                    time_diff = idx_t - idx_s
+                    price_diff = P_s - P_ext  # 正向化为正值
+                    dist = np.sqrt((time_diff / cfg.future_T) ** 2 + (price_diff / (cfg.kappa * atr_s)) ** 2)
+                    min_dist = min(min_dist, dist)
+                    break
         D_labels.append(min_dist)
         xi_labels.append(xi_series[idx_s])  # 该信号点的当前 ξ
 
@@ -331,12 +347,12 @@ class SignalDataset(Dataset):
     支持在线标准化、样本均衡和对比学习的正负样本生成。
     """
 
-    def __init__(self, df, feature_cols, cfg, extrema_idx_set, scaler=None, is_train=True):
+    def __init__(self, df, feature_cols, cfg, extrema_idx_set, scaler=None, signal_indices=None):
         self.df = df
         self.features = df[feature_cols].values.astype(np.float32)
         self.labels_D = df['D_label'].values
         self.labels_xi = df['xi_label'].values
-        self.signal_mask = (df['signal'] != 'none').values  # 布尔掩码，标识信号点
+        # self.signal_mask = (df['signal'] != 'none').values  # 布尔掩码，标识信号点
         self.window = cfg.window_size
         self.cfg = cfg
         # 由于compute_evt_distance_xi函数改为用bar位置计算距离而非时间，因此此处需要确保 extrema_idx_set 传入
@@ -351,7 +367,12 @@ class SignalDataset(Dataset):
             self.features = self.scaler.transform(self.features)
 
         # 筛选有效信号点（保证正样本窗口不越界）
-        raw_indices = np.where(self.signal_mask)[0]
+        # ---- 信号索引筛选 ----
+        if signal_indices is not None:
+            raw_indices = signal_indices
+        else:
+            raw_indices = np.where((df['signal'] != 'none').values)[0]
+
         self.signal_indices = [
             i for i in raw_indices
             if i >= self.window
@@ -359,6 +380,8 @@ class SignalDataset(Dataset):
                and not np.isnan(self.labels_D[i])
                and not np.isnan(self.labels_xi[i])
         ]
+        # 新增：记录每个有效信号点的交易类型
+        self.signal_types = [self.df['signal'].iloc[i] for i in self.signal_indices]
 
     def __len__(self):
         """返回有效信号点的数量"""
@@ -375,17 +398,21 @@ class SignalDataset(Dataset):
         abs_ret = self.df['abs_returns'].values[i - self.window:i]
 
         # 正样本窗口：未来第一个极值点前后各contrastive_win天的环境窗口
-
-        # 若未来窗口内未找到极值点，用全零张量占位（实际训练中会被掩盖或忽略）
         pos_win = np.zeros((2 * self.cfg.contrastive_win + 1, self.features.shape[1]), dtype=np.float32)
         future_end = min(len(self.df), i + cfg.future_T + 1)
+        # 获取当前信号的类型
+        sig_type = self.signal_types[idx]
+
         for j in range(i + 1, future_end):
-            if j in self.extrema_idx_set:  # 找到第一个结构性极值点
-                start = max(0, j - cfg.contrastive_win)
-                end = min(len(self.df), j + cfg.contrastive_win + 1)
-                # 得益于筛选条件，这里 start:end 长度必定 >= 2*contrastive_win+1
-                pos_win = self.features[start:end]  # 如果仍想安全，可做一次裁剪/填充
-                break
+            if j in self.extrema_idx_set:
+                P_ext = self.df['close'].iloc[j]
+                P_s = self.df['close'].iloc[i]
+                # 方向判断：买入信号只接受未来更高的极值点，卖出信号只接受未来更低的极值点
+                if (sig_type == 'buy' and P_ext > P_s) or (sig_type == 'sell' and P_ext < P_s):
+                    start = max(0, j - cfg.contrastive_win)
+                    end = min(len(self.df), j + cfg.contrastive_win + 1)
+                    pos_win = self.features[start:end]
+                    break
 
         # 负样本窗口（随机远离极值点的区域） （保证长度固定）
         neg_win = np.zeros_like(pos_win)
@@ -565,7 +592,15 @@ def train_epoch(model, dataloader, optimizer, cfg):
         h_pos_seq = model.encoder(pos_win)      # 序列
         h_pos = h_pos_seq[:, -1, :]
         proj_pos = model.proj_head(h_pos)
-        loss_cl = info_nce(proj_anchor, proj_pos, cfg.tau_cl)
+
+        # 过滤掉正样本为全零的无效样本（未找到同向极值点）
+        pos_valid_mask = pos_win.reshape(pos_win.size(0), -1).abs().sum(dim=1) > 1e-8
+        if pos_valid_mask.sum() > 1:
+            proj_anchor_valid = proj_anchor[pos_valid_mask]
+            proj_pos_valid = proj_pos[pos_valid_mask]
+            loss_cl = info_nce(proj_anchor_valid, proj_pos_valid, cfg.tau_cl)
+        else:
+            loss_cl = torch.tensor(0.0, device=pos_win.device)
 
         loss = cfg.lambda_D * loss_D + cfg.lambda_xi * loss_xi + cfg.lambda_cl * loss_cl
         optimizer.zero_grad()
@@ -575,12 +610,42 @@ def train_epoch(model, dataloader, optimizer, cfg):
     return total_loss / len(dataloader)
 
 
+def split_signals_by_time(df, cfg, train_ratio=0.7):
+    """
+    返回 train_indices, test_indices （在df中的位置索引）
+    """
+    signal_df = df[df['signal'] != 'none'].copy()
+    if signal_df.empty:
+        return [], []
+
+    # 按时间排序
+    signal_df = signal_df.sort_index()
+    n = len(signal_df)
+    split_idx = int(n * train_ratio)
+    train_times = signal_df.index[:split_idx]
+    test_times = signal_df.index[split_idx:]
+
+    # 找出训练/测试信号在df中的绝对位置
+    train_locs = [df.index.get_loc(t) for t in train_times]
+    test_locs = [df.index.get_loc(t) for t in test_times]
+
+    # 防止训练信号的未来窗口触及测试集时间
+    # 取测试集的最小位置，要求 train_loc + cfg.future_T + cfg.contrastive_win < min_test_loc
+    if test_locs:
+        min_test_loc = min(test_locs)
+        train_locs = [loc for loc in train_locs
+                      if loc + cfg.future_T + cfg.contrastive_win < min_test_loc]
+    return train_locs, test_locs
+
+
 # ================== 7. 回测与决策 ==================
 def apply_filter_and_trade(df, model, cfg, scaler, feature_cols):
     signal_idx = df[df['signal'] != 'none'].index
     capital = 1.0
     position = 0
     equity = [capital]
+    signal_records = []          # 新增
+
     for idx, row in df.iterrows():
         if idx in signal_idx:
             i_loc = df.index.get_loc(idx)
@@ -594,6 +659,16 @@ def apply_filter_and_trade(df, model, cfg, scaler, feature_cols):
                                         torch.zeros(1).to(cfg.device),
                                         torch.tensor([1.0]).to(cfg.device))
                     d_mid = D_hat[0,1].item()
+
+                if row['signal'] == 'buy':
+                    executed = (d_mid < cfg.D_threshold)
+                    signal_records.append({
+                        'time': idx,
+                        'price': row['close'],
+                        'd_mid': d_mid,
+                        'executed': executed
+                    })
+
                 if d_mid < cfg.D_threshold and row['signal'] == 'buy':
                     position = capital / row['close']
                     capital = 0
@@ -604,7 +679,7 @@ def apply_filter_and_trade(df, model, cfg, scaler, feature_cols):
             equity.append(position * row['close'])
         else:
             equity.append(capital)
-    return equity
+    return equity, signal_records
 
 
 def backtest_no_filter(df, cfg):
@@ -654,50 +729,135 @@ def calc_max_drawdown(equity_curve):
     return dd.min()
 
 
-def labeled_signals(df):
-    # 将 D_label 和 xi_label 写回 signals.csv 对应的行
-    signals_orig = pd.read_csv(cfg.signal_file, parse_dates=['time'])
-    # 从标注结果中取出信号点的标签
-    labeled_signals = df[df['signal'] != 'none'][['D_label', 'xi_label']].copy()
-    labeled_signals.index.name = 'time'
-    labeled_signals = labeled_signals.reset_index()
-    # 按时间合并
-    signals_labeled = signals_orig.merge(labeled_signals, on='time', how='left')
-    signals_labeled.to_csv("signals_labeled.csv", index=False)
+def labeled_signals():
+    print("加载数据...")
+    stocks_df = pd.read_csv("D://github//RobotMeQ//QuantData//asset_code//a800_stocks_2025.csv", dtype={'code': str})
+    for _, row in stocks_df.iterrows():
+        code = row['code']  # 如 'sh.600000'
+        # 构造文件路径，注意你的命名规则
+        code_short = code.split('.')[-1]  # '600000'
+        ohlcv_path = f"D:/github/RobotMeQ_Dataset/QuantData/backTest/bar_A_{code_short}_d.csv"
+        signal_path = f"D:/github/RobotMeQ_Dataset/QuantData/trade_point_backtest_fuzzy_nature/A_{code_short}_d.csv"
+
+        df, feature_cols = load_and_prepare(signal_path, ohlcv_path)
+        print(code+"计算极值标注...")
+        df, xi_series, sigma_series, extrema_idx_set = compute_evt_distance_xi(df, cfg)
+        # df.to_csv(code+"_labeled_data.csv")  # 保存标注结果
+
+        # 将 D_label 和 xi_label 写回 signals.csv 对应的行
+        signals_orig = pd.read_csv(signal_path, parse_dates=['time'])
+        # 从标注结果中取出信号点的标签
+        labeled_signals = df[df['signal'] != 'none'][['D_label', 'xi_label']].copy()
+        labeled_signals.index.name = 'time'
+        labeled_signals = labeled_signals.reset_index()
+        # 按时间合并
+        signals_labeled = signals_orig.merge(labeled_signals, on='time', how='left')
+        signals_labeled.to_csv("./trade_point_backtest_fuzzy_nature/"+code_short+"signals_labeled.csv", index=False)
 
 
 # ================== 8. 主程序（示例） ==================
 def main():
-    print("加载数据...")
-    df, feature_cols = load_and_prepare(cfg.signal_file, cfg.ohlcv_file)
-    print("计算极值标注...")
-    df, xi_series, sigma_series, extrema_idx_set = compute_evt_distance_xi(df, cfg)
-    df.to_csv("labeled_data.csv")  # 保存标注结果
+    # 股票列表（按你自己的路径修改）
+    # stock_codes = ['AES', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'TSLA']  # 可扩展，例如 ['AES', '600018', '600176']  'AES', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'TSLA'
+    # stock_codes = [
+    #     "", "002311", "002493", "600588", "002049", "000977", "000617", "601111",
+    #     "601006", "002475", "000876", "601600", "002179", "601818", "601117", "600438",
+    #     "000568", "002304", "002050", "601318", "600111", "600426", "601618", "600176",
+    #     "600460", "600415", "600019", "600893", "600104", "600031", "600089", "600115",
+    #     "000661", "600233"
+    # ]
+    # 000977
+    stock_codes = [
+        "601228"
+    ]
+    # stocks_df = pd.read_csv("D://github//RobotMeQ//QuantData//asset_code//a800_stocks_2025.csv", dtype={'code': str})
+    # for _, row in stocks_df.iterrows():
+    #     code = row['code']  # 如 'sh.600000'
+    #     stock_codes.append(code)
+    #
+    #     # 构造文件路径，注意你的命名规则
+    #     code_short = code.split('.')[-1]  # '600000'
+    ohlcv_paths = [f"D:/github/RobotMeQ_Dataset/QuantData/backTest/bar_A_{code}_d.csv" for code in stock_codes]
+    signal_paths = [f"D:/github/RobotMeQ_Dataset/QuantData/trade_point_backtest_fuzzy_nature/A_{code}_d.csv" for code in stock_codes]
 
-    print("构建数据集...")
-    dataset = SignalDataset(df, feature_cols, cfg, extrema_idx_set, scaler=None)
-    scaler = dataset.scaler
-    dataloader = DataLoader(dataset, batch_size=cfg.batch_size, shuffle=True)
+    # ---------- 第一阶段：收集所有股票的训练集特征，用于拟合全局 scaler ----------
+    global_train_features = []          # 存储每只股票训练期的特征数组
+    stock_data_info = []                # 存储每只股票的处理信息，供第二阶段使用
 
-    print("初始化编码器...")
+    for code, sig_path, ohlcv_path in zip(stock_codes, signal_paths, ohlcv_paths):
+        print(f"处理股票: {code}")
+        cfg.signal_file = sig_path
+        cfg.ohlcv_file = ohlcv_path
+
+        # 加载并标注（标注使用全量数据）
+        df, feature_cols = load_and_prepare(sig_path, ohlcv_path)
+        df, xi_series, sigma_series, extrema_idx_set = compute_evt_distance_xi(df, cfg)
+
+        # 划分训练/测试信号索引
+        train_indices, test_indices = split_signals_by_time(df, cfg, train_ratio=0.7)
+        if len(train_indices) == 0 or len(test_indices) == 0:
+            print(f"股票 {code} 训练或测试信号不足，跳过")
+            continue
+
+        # 确定训练期的时间范围（最后一个训练信号的时间）
+        train_times = [df.index[idx] for idx in train_indices]  # 训练信号对应的时间戳
+        end_train_time = max(train_times)                       # 训练期结束时间
+
+        # 提取该股票训练期的所有特征行（用于 fit 全局 scaler）
+        train_mask = df.index <= end_train_time
+        train_features_stock = df[feature_cols].loc[train_mask].values
+        global_train_features.append(train_features_stock)
+
+        # 保存信息供第二阶段使用
+        stock_data_info.append((
+            code, df, feature_cols, extrema_idx_set,
+            train_indices, test_indices, end_train_time
+        ))
+
+    if len(global_train_features) == 0:
+        print("没有可用的训练数据")
+        return
+
+    # 用所有股票的训练数据拟合全局 scaler
+    all_train_data = np.concatenate(global_train_features, axis=0)
+    global_scaler = StandardScaler()
+    global_scaler.fit(all_train_data)
+    print(f"全局 scaler 已拟合，训练数据总行数: {len(all_train_data)}")
+
+    # ---------- 第二阶段：用全局 scaler 创建 Dataset ----------
+    all_train_datasets = []
+    test_info = []   # 存储 (code, df, test_ds, scaler, feature_cols, extrema_idx_set)
+
+    for code, df, feature_cols, extrema_idx_set, train_indices, test_indices, _ in stock_data_info:
+        # 训练集与测试集都使用全局 scaler
+        train_ds = SignalDataset(df, feature_cols, cfg, extrema_idx_set,
+                                 scaler=global_scaler, signal_indices=train_indices)
+        test_ds = SignalDataset(df, feature_cols, cfg, extrema_idx_set,
+                                scaler=global_scaler, signal_indices=test_indices)
+
+        all_train_datasets.append(train_ds)
+        test_info.append((code, df, test_ds, global_scaler, feature_cols, extrema_idx_set))
+
+    # 合并所有股票训练数据
+    combined_train_ds = torch.utils.data.ConcatDataset(all_train_datasets)
+    train_loader = DataLoader(combined_train_ds, batch_size=cfg.batch_size, shuffle=True)
+
+    # 初始化模型
     if cfg.encoder_type == 'BiLSTM':
         encoder = BiLSTMEncoder(input_dim=len(feature_cols), d_model=cfg.d_model)
-    elif cfg.encoder_type == 'Informer':
+    else:
         encoder = InformerEncoder(input_dim=len(feature_cols), d_model=cfg.d_model,
                                   seq_len=cfg.window_size, n_heads=cfg.n_heads)
-    else:
-        raise ValueError("Unknown encoder_type")
-
     model = CTAML(encoder, d_model=cfg.d_model, n_heads=cfg.n_heads,
                   proj_dim=cfg.proj_dim, quantiles=cfg.quantiles,
                   use_taa=cfg.use_taa).to(cfg.device)
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg.lr)
 
-    print("开始训练...")
+    # 训练
     best_loss = float('inf')
     patience_counter = 0
     for epoch in range(cfg.epochs):
-        loss = train_epoch(model, dataloader, optimizer, cfg)
+        loss = train_epoch(model, train_loader, optimizer, cfg)
         print(f"Epoch {epoch+1}/{cfg.epochs}, Loss: {loss:.4f}")
         if loss < best_loss:
             best_loss = loss
@@ -709,45 +869,45 @@ def main():
                 print("早停触发")
                 break
 
-    print("训练完成，模型已保存。可运行回测。")
-
-    # ========== 回测对比 ==========
-    print("\n加载最佳模型进行回测对比...")
-    # 重建模型并加载权重
-    if cfg.encoder_type == 'BiLSTM':
-        encoder_eval = BiLSTMEncoder(input_dim=len(feature_cols), d_model=cfg.d_model)
-    else:
-        encoder_eval = InformerEncoder(input_dim=len(feature_cols), d_model=cfg.d_model,
-                                       seq_len=cfg.window_size, n_heads=cfg.n_heads)
-    model_eval = CTAML(encoder_eval, d_model=cfg.d_model, n_heads=cfg.n_heads,
+    # 加载最佳模型用于测试
+    model_eval = CTAML(encoder, d_model=cfg.d_model, n_heads=cfg.n_heads,
                        proj_dim=cfg.proj_dim, quantiles=cfg.quantiles,
                        use_taa=cfg.use_taa).to(cfg.device)
     model_eval.load_state_dict(torch.load("best_ctaml.pth"))
     model_eval.eval()
 
-    # 过滤回测
-    equity_filtered = apply_filter_and_trade(df, model_eval, cfg, scaler, feature_cols)
-    # 无过滤基线
-    equity_baseline = backtest_no_filter(df, cfg)
+    # 对每只股票单独回测并汇总指标
+    summary = []
+    for code, df, test_ds, scaler, feature_cols, _ in test_info:
+        equity_f, buy_records = apply_filter_and_trade(df, model_eval, cfg, scaler, feature_cols)
+        equity_b = backtest_no_filter(df, cfg)
 
-    sharpe_f = calc_sharpe(equity_filtered)
-    mdd_f = calc_max_drawdown(equity_filtered)
-    sharpe_b = calc_sharpe(equity_baseline)
-    mdd_b = calc_max_drawdown(equity_baseline)
+        if buy_records:
+            df_rec = pd.DataFrame(buy_records)
+            print(f"\n===== 股票 {code} 测试集买入信号 d_mid 分析 =====")
+            print(f"总买入信号数: {len(df_rec)}")
+            print(f"d_mid 最小值: {df_rec['d_mid'].min():.4f}")
+            print(f"d_mid 最大值: {df_rec['d_mid'].max():.4f}")
+            print(f"d_mid 中位数: {df_rec['d_mid'].median():.4f}")
+            executed_count = df_rec['executed'].sum()
+            print(f"实际执行信号数: {executed_count}")
+            if executed_count > 0:
+                print("执行的信号详情:")
+                print(df_rec[df_rec['executed']][['time', 'price', 'd_mid']].to_string())
+        else:
+            print(f"股票 {code} 测试集无买入信号记录")
 
-    print(f"\n{'':-<40}")
-    print(f"{'指标':<20}{'过滤后':<15}{'不过滤':<15}")
-    print(f"{'':-<40}")
-    print(f"{'年化夏普':<20}{sharpe_f:<15.4f}{sharpe_b:<15.4f}")
-    print(f"{'最大回撤':<20}{mdd_f:<15.4%}{mdd_b:<15.4%}")
-    print(f"{'':-<40}")
+        sharpe_f = calc_sharpe(equity_f)
+        mdd_f = calc_max_drawdown(equity_f)
+        sharpe_b = calc_sharpe(equity_b)
+        mdd_b = calc_max_drawdown(equity_b)
+        summary.append((code, sharpe_f, mdd_f, sharpe_b, mdd_b))
+        print(f"股票 {code}: 过滤后 夏普={sharpe_f:.4f}, MDD={mdd_f:.4%} | 不过滤 夏普={sharpe_b:.4f}, MDD={mdd_b:.4%}")
 
-    # 保存权益曲线以便画图
-    pd.DataFrame({
-        'filtered': equity_filtered,
-        'baseline': equity_baseline
-    }).to_csv("equity_curves.csv", index=False)
-    print("权益曲线已保存至 equity_curves.csv")
+    if summary:
+        avg_sharpe_f = np.mean([x[1] for x in summary])
+        avg_mdd_f = np.mean([x[2] for x in summary])
+        print(f"\n平均过滤后 夏普: {avg_sharpe_f:.4f}, 平均MDD: {avg_mdd_f:.4%}")
 
 
 if __name__ == "__main__":

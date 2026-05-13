@@ -107,6 +107,40 @@ def evaluate_labeling(ohlcv_path, signals_labeled_path, future_T=60):
     return df_results, stats, corr, p_value
 
 
+def print_filtered_stocks(df_summary,
+                          min_signals=30,
+                          max_p_value=0.10,
+                          max_d1_ratio=0.90,
+                          min_neg_corr=-0.05):
+    """
+    按照以下规则筛选股票并打印：
+    - 总信号数 ≥ min_signals
+    - Spearman ρ < min_neg_corr（至少是微弱的负相关）
+    - p 值 ≤ max_p_value
+    - D=1 占比 ≤ max_d1_ratio（确保有足够的非D=1样本）
+    """
+    mask = (
+        (df_summary['total_signals'] >= min_signals) &
+        (df_summary['spearman_corr'] < min_neg_corr) &
+        (df_summary['p_value'] <= max_p_value) &
+        (df_summary['count_D1'] / df_summary['total_signals'] <= max_d1_ratio)
+    )
+    filtered = df_summary[mask].sort_values('spearman_corr')
+
+    print("\n" + "=" * 70)
+    print(f"筛选条件: 信号数≥{min_signals}, ρ<{min_neg_corr}, p≤{max_p_value}, D=1占比≤{max_d1_ratio}")
+    print(f"符合条件股票数: {len(filtered)} / {len(df_summary)}")
+    print("=" * 70)
+
+    if len(filtered) > 0:
+        print(filtered[['code', 'total_signals', 'spearman_corr', 'p_value',
+                         'mean_return_all', 'mean_return_D1', 'count_D1']].to_string(index=False))
+    else:
+        print("⚠️ 没有股票满足当前筛选条件，建议放宽参数。")
+
+    return filtered
+
+
 def batch_evaluate(stock_list_path, ohlcv_dir, signals_labeled_dir, future_T=60, output_dir="./eval_results"):
     """
     批量评估多只股票
@@ -188,6 +222,16 @@ def batch_evaluate(stock_list_path, ohlcv_dir, signals_labeled_dir, future_T=60,
         print(
             f"显著负相关股票数 (corr<0, p<0.05): {((df_summary['spearman_corr'] < 0) & (df_summary['p_value'] < 0.05)).sum()}")
         print(f"正相关股票数: {(df_summary['spearman_corr'] > 0).sum()}")
+
+        # 自动筛选适合训练CTAML的股票
+        filtered = print_filtered_stocks(
+            df_summary,
+            min_signals=30,  # 信号太少不足以训练
+            max_p_value=0.10,  # 可放宽到0.10
+            max_d1_ratio=0.90,  # 至少10%的信号D≠1
+            min_neg_corr=-0.05  # 至少微弱的负相关
+        )
+        filtered.to_csv(os.path.join(output_dir, "filtered_stocks.csv"), index=False)
     else:
         print("没有成功评估任何股票")
 
@@ -198,7 +242,7 @@ if __name__ == "__main__":
     # 请根据实际情况修改以下路径
     STOCK_LIST = "D://github//RobotMeQ//QuantData//asset_code//a800_stocks_2025.csv"
     OHLCV_DIR = "D:/github/RobotMeQ_Dataset/QuantData/backTest"
-    SIGNALS_DIR = "./trade_point_backtest_tea_radical_nature"
+    SIGNALS_DIR = "./trade_point_backtest_fuzzy_nature"
     OUTPUT_DIR = "./labeling_eval_batch"
 
     batch_evaluate(STOCK_LIST, OHLCV_DIR, SIGNALS_DIR, future_T=60, output_dir=OUTPUT_DIR)
