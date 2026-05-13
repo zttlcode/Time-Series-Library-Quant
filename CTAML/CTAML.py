@@ -35,8 +35,8 @@ class Config:
     kappa = 1.5  # 距离归一化中的ATR乘数，控制价格维度的尺度
     # EVT相关
     evt_rolling = 252  # 用于GPD拟合的滚动窗口长度（对应约一年交易日）
-    evt_quantile = 0.95  # 极端事件的收益率绝对值分位数阈值
-    extrema_win = 1  # 极值点邻域半径（日）
+    evt_quantile = 0.90  # 极端事件的收益率绝对值分位数阈值
+    extrema_win = 3  # 极值点邻域半径（日）
     # 对比学习
     contrastive_win = 5  # 对比学习正样本窗口半径  正/负样本的环境窗口半径（论文取±5步）
     D_buckets = 8  # 样本均衡分桶数（此处预留，用于按D值分层采样）
