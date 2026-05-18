@@ -503,6 +503,10 @@ def inference(name,
     allStockCode = pd.read_csv("D:/github/RobotMeQ/QuantData/asset_code/a800_stocks.csv", dtype={'code': str})
     df_dataset = allStockCode.iloc[500:]
     n = 1
+    if strategy_name == "c4_oscillation_boll_nature":
+        strategy_name = "boll"
+    elif strategy_name == "c4_oscillation_kdj_nature":
+        strategy_name = "kdj"
     for index, row in df_dataset.iterrows():
         asset_code = row['code'][3:]
         problem_name_str = ("pred_" + str(pred_market_type) + "_" + name + "_"
@@ -516,9 +520,9 @@ def inference(name,
         except Exception as e:
             print(e)
             continue
-        n += 1
-        if n > 20:
-            break
+        # n += 1
+        # if n > 20:
+        #     break
 
 
 def inference_live(name,
