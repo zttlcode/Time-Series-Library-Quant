@@ -249,7 +249,7 @@ class Exp_Classification(Exp_Basic):
 
         return self.model
 
-    def test(self, setting, test=0, asset_code=None, pred_market=False):
+    def test(self, setting, test=0, asset_code=None, pred_market=False, feature_plan_name=None):
         test_data, test_loader = self._get_data(flag='TEST')
         if test:
             print('loading model')
@@ -330,6 +330,7 @@ class Exp_Classification(Exp_Basic):
         f = open(os.path.join(folder_path, file_name), 'a')
         f.write(setting + "  \n")
         # f.write('accuracy:{}'.format(accuracy))
+        f.write(f'feature_plan_name: {feature_plan_name}\n')
         f.write(f'accuracy: {metrics["accuracy"]}\n')
         f.write(f'balanced_accuracy: {metrics.get("balanced_accuracy", np.nan)}\n')
 

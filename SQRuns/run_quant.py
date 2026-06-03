@@ -9,11 +9,10 @@ from exp.exp_classification import Exp_Classification
 from utils.print_args import print_args
 import random
 import numpy as np
-
 import pandas as pd
 
 
-def run_train(train_set_filepath, model_id):
+def run_train(train_set_filepath, model_id, feature_plan_name):
     fix_seed = 2021
     random.seed(fix_seed)
     torch.manual_seed(fix_seed)
@@ -200,7 +199,7 @@ def run_train(train_set_filepath, model_id):
             exp.train(setting)
 
             print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
-            exp.test(setting)
+            exp.test(setting, feature_plan_name=feature_plan_name)
 
             torch.cuda.empty_cache()
     else:
@@ -459,22 +458,25 @@ def train(name,
           handle_uneven_samples,
           strategy_name,
           feature_plan_name,
+          plan_count,
           label_name,
           model_id,
           classification,
           classification_direction):
+    if plan_count is not None:
+        temp_file_feature_name = plan_count
+    else:
+        temp_file_feature_name = feature_plan_name
     # 训练模型
     if classification == 2:
-        problem_name_str = ("dataset_" + name + "_" + str(strategy_name) + "_" + str(feature_plan_name) + "_" +
-                            str(handle_uneven_samples) + "_uneven" +
-                            str(label_name) + "_" + str(time_point_step) + "step" +
-                            "_" + str(classification) + "_class_" + str(classification_direction))
+        problem_name_str = ("_" + name + "_" + str(strategy_name) + "_" + str(temp_file_feature_name) + "_" +
+                            str(handle_uneven_samples) + "U" + str(label_name) + "_" + str(time_point_step) +
+                            "S_" + str(classification) + "C_" + str(classification_direction))
     else:
-        problem_name_str = ("dataset_" + name + "_" + str(strategy_name) + "_" + str(feature_plan_name) + "_" +
-                            str(handle_uneven_samples) + "_uneven" +
-                            str(label_name) + "_" + str(time_point_step) + "step")
+        problem_name_str = ("_" + name + "_" + str(strategy_name) + "_" + str(temp_file_feature_name) + "_" +
+                            str(handle_uneven_samples) + "U" + str(label_name) + "_" + str(time_point_step) + "S")
 
-    run_train(problem_name_str, model_id)
+    run_train(problem_name_str, model_id, feature_plan_name)
 
 
 def inference(name,
@@ -573,45 +575,3 @@ def inference_live(name,
                             + str(time_point_step) + "_step")
         run_predict(problem_name_str, model_id, time_point_step, str(data[3]), False, strategy_name)
 
-
-if __name__ == '__main__':
-    name = 'A_d'
-    time_point_step = '160'
-    handle_uneven_samples = 'True'
-    strategy_name = 'tea_radical_nature'  # fuzzy_nature tea_radical_nature feature_all_v1 feature_basic_plus
-    feature_plan_name = 'feature_basic_plus'
-    label_name = '_label5'  # _label1 _label2
-    model_id = name + '_TimesNet_' + strategy_name  # 区别不同训练系数  a800_60_market  A_15_tea  A_d_pred
-
-    classification = 2
-    classification_direction = 'buy'
-
-    train(name,
-          time_point_step,
-          handle_uneven_samples,
-          strategy_name,
-          feature_plan_name,
-          label_name,
-          model_id,
-          classification,
-          classification_direction)
-
-    # pred_market_type = False  # 预测行情 True 是3分类预测行情  False 是4分类预测交易点
-    # inference(name,
-    #           time_point_step,
-    #           handle_uneven_samples,
-    #           strategy_name,
-    #           feature_plan_name,
-    #           label_name,
-    #           model_id,
-    #           classification,
-    #           classification_direction,
-    #           pred_market_type)
-
-    # inference_live(name,
-    #                time_point_step,
-    #                strategy_name,
-    #                feature_plan_name,
-    #                model_id,
-    #                classification,
-    #                classification_direction)
