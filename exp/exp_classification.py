@@ -9,9 +9,17 @@ import time
 import warnings
 import numpy as np
 import pdb
+from sklearn.metrics import (
+    precision_score,
+    recall_score,
+    f1_score,
+    roc_auc_score,
+    average_precision_score,
+    balanced_accuracy_score
+)
+from sklearn.preprocessing import label_binarize
 
 warnings.filterwarnings('ignore')
-
 
 class Exp_Classification(Exp_Basic):
     def __init__(self, args):
@@ -45,6 +53,62 @@ class Exp_Classification(Exp_Basic):
         # criterion = nn.CrossEntropyLoss(weight=torch.tensor([0.25, 0.59, 0.08, 0.08]))
         return criterion
 
+    def _compute_metrics(self, trues, probs, predictions):
+        """
+        兼容二分类 / 多分类的指标计算
+        """
+        trues = np.asarray(trues).reshape(-1)
+        predictions = np.asarray(predictions).reshape(-1)
+        probs = np.asarray(probs)
+
+        num_class = self.args.num_class
+        out = {}
+
+        # 基础指标
+        out["accuracy"] = float(np.mean(predictions == trues))
+        out["balanced_accuracy"] = float(balanced_accuracy_score(trues, predictions))
+
+        if num_class == 2:
+            # 二分类：默认把正类记为 1
+            if probs.ndim == 2 and probs.shape[1] >= 2:
+                pos_score = probs[:, 1]
+            else:
+                pos_score = probs.reshape(-1)
+
+            out["precision"] = float(precision_score(trues, predictions, zero_division=0))
+            out["recall"] = float(recall_score(trues, predictions, zero_division=0))
+            out["f1"] = float(f1_score(trues, predictions, zero_division=0))
+
+            try:
+                out["auc"] = float(roc_auc_score(trues, pos_score))
+            except Exception:
+                out["auc"] = np.nan
+
+            try:
+                out["pr_auc"] = float(average_precision_score(trues, pos_score))
+            except Exception:
+                out["pr_auc"] = np.nan
+
+        else:
+            # 多分类：macro 平均
+            out["precision_macro"] = float(precision_score(trues, predictions, average="macro", zero_division=0))
+            out["recall_macro"] = float(recall_score(trues, predictions, average="macro", zero_division=0))
+            out["f1_macro"] = float(f1_score(trues, predictions, average="macro", zero_division=0))
+
+            try:
+                y_true_bin = label_binarize(trues, classes=np.arange(num_class))
+                out["auc_macro_ovr"] = float(roc_auc_score(y_true_bin, probs, average="macro", multi_class="ovr"))
+            except Exception:
+                out["auc_macro_ovr"] = np.nan
+
+            try:
+                y_true_bin = label_binarize(trues, classes=np.arange(num_class))
+                out["pr_auc_macro"] = float(average_precision_score(y_true_bin, probs, average="macro"))
+            except Exception:
+                out["pr_auc_macro"] = np.nan
+
+        return out
+
     def vali(self, vali_data, vali_loader, criterion):
         total_loss = []
         preds = []
@@ -71,13 +135,20 @@ class Exp_Classification(Exp_Basic):
 
         preds = torch.cat(preds, 0)
         trues = torch.cat(trues, 0)
-        probs = torch.nn.functional.softmax(preds)  # (total_samples, num_classes) est. prob. for each class and sample
-        predictions = torch.argmax(probs, dim=1).cpu().numpy()  # (total_samples,) int class index for each sample
+        # probs = torch.nn.functional.softmax(preds)  # (total_samples, num_classes) est. prob. for each class and sample
+        # predictions = torch.argmax(probs, dim=1).cpu().numpy()  # (total_samples,) int class index for each sample
+        # trues = trues.flatten().cpu().numpy()
+        # accuracy = cal_accuracy(predictions, trues)
+        probs = torch.softmax(preds, dim=1).cpu().numpy()
+        predictions = np.argmax(probs, axis=1)
         trues = trues.flatten().cpu().numpy()
-        accuracy = cal_accuracy(predictions, trues)
+
+        metrics = self._compute_metrics(trues, probs, predictions)
+        metrics["loss"] = float(total_loss)
+        metrics["n"] = int(len(trues))
 
         self.model.train()
-        return total_loss, accuracy
+        return total_loss, metrics
 
     def train(self, setting):
         train_data, train_loader = self._get_data(flag='TRAIN')
@@ -112,7 +183,8 @@ class Exp_Classification(Exp_Basic):
                 label = label.to(self.device)
 
                 outputs = self.model(batch_x, padding_mask, None, None)
-
+                if hasattr(self.model, 'collect_batch'):
+                    self.model.collect_batch(batch_x, label)
                 # # 20250118 必须在这里把他放GPU上，但后面要放回CPU，没办法通过传参做，只能重新new个
                 # criterion_tmp = nn.CrossEntropyLoss(weight=torch.tensor([0.25, 0.59, 0.08, 0.08]).to(self.device))
                 # loss = criterion_tmp(outputs, label.long().squeeze(-1))
@@ -135,19 +207,43 @@ class Exp_Classification(Exp_Basic):
 
             print("Epoch: {} cost time: {}".format(epoch + 1, time.time() - epoch_time))
             train_loss = np.average(train_loss)
-            vali_loss, val_accuracy = self.vali(vali_data, vali_loader, criterion)
-            test_loss, test_accuracy = self.vali(test_data, test_loader, criterion)
+            # vali_loss, val_accuracy = self.vali(vali_data, vali_loader, criterion)
+            # test_loss, test_accuracy = self.vali(test_data, test_loader, criterion)
+            #
+            # print(
+            #     "Epoch: {0}, Steps: {1} | Train Loss: {2:.3f} Vali Loss: {3:.3f} Vali Acc: {4:.3f} Test Loss: {5:.3f} Test Acc: {6:.3f}"
+            #     .format(epoch + 1, train_steps, train_loss, vali_loss, val_accuracy, test_loss, test_accuracy))
+            # early_stopping(-val_accuracy, self.model, path)
+            vali_loss, val_metrics = self.vali(vali_data, vali_loader, criterion)
+            test_loss, test_metrics = self.vali(test_data, test_loader, criterion)
 
             print(
-                "Epoch: {0}, Steps: {1} | Train Loss: {2:.3f} Vali Loss: {3:.3f} Vali Acc: {4:.3f} Test Loss: {5:.3f} Test Acc: {6:.3f}"
-                .format(epoch + 1, train_steps, train_loss, vali_loss, val_accuracy, test_loss, test_accuracy))
-            early_stopping(-val_accuracy, self.model, path)
+                "Epoch: {0}, Steps: {1} | "
+                "Train Loss: {2:.3f} | Val Loss: {3:.3f} | Val Acc: {4:.3f} | Val F1: {5:.3f} | Val AUC: {6:.3f} | Val PR-AUC: {7:.3f} | "
+                "Test Loss: {8:.3f} | Test Acc: {9:.3f} | Test F1: {10:.3f} | Test AUC: {11:.3f} | Test PR-AUC: {12:.3f}"
+                .format(
+                    epoch + 1, train_steps,
+                    train_loss,
+                    vali_loss,
+                    val_metrics.get("accuracy", np.nan),
+                    val_metrics.get("f1", val_metrics.get("f1_macro", np.nan)),
+                    val_metrics.get("auc", val_metrics.get("auc_macro_ovr", np.nan)),
+                    val_metrics.get("pr_auc", val_metrics.get("pr_auc_macro", np.nan)),
+                    test_loss,
+                    test_metrics.get("accuracy", np.nan),
+                    test_metrics.get("f1", test_metrics.get("f1_macro", np.nan)),
+                    test_metrics.get("auc", test_metrics.get("auc_macro_ovr", np.nan)),
+                    test_metrics.get("pr_auc", test_metrics.get("pr_auc_macro", np.nan)),
+                )
+            )
+            early_stopping(-val_metrics["accuracy"], self.model, path)
             if early_stopping.early_stop:
                 print("Early stopping")
                 break
             if (epoch + 1) % 5 == 0:
                 adjust_learning_rate(model_optim, epoch + 1, self.args)
-
+        if hasattr(self.model, 'fit_xgb'):
+            self.model.fit_xgb()
         best_model_path = path + '/' + 'checkpoint.pth'
         self.model.load_state_dict(torch.load(best_model_path))
 
@@ -185,10 +281,16 @@ class Exp_Classification(Exp_Basic):
         trues = torch.cat(trues, 0)
         print('test shape:', preds.shape, trues.shape)
 
-        probs = torch.nn.functional.softmax(preds)  # (total_samples, num_classes) est. prob. for each class and sample
-        predictions = torch.argmax(probs, dim=1).cpu().numpy()  # (total_samples,) int class index for each sample
+        # probs = torch.nn.functional.softmax(preds)  # (total_samples, num_classes) est. prob. for each class and sample
+        # predictions = torch.argmax(probs, dim=1).cpu().numpy()  # (total_samples,) int class index for each sample
+        # trues = trues.flatten().cpu().numpy()
+        # accuracy = cal_accuracy(predictions, trues)
+        probs = torch.softmax(preds, dim=1).cpu().numpy()
+        predictions = np.argmax(probs, axis=1)
         trues = trues.flatten().cpu().numpy()
-        accuracy = cal_accuracy(predictions, trues)
+
+        metrics = self._compute_metrics(trues, probs, predictions)
+        accuracy = metrics["accuracy"]
 
         if test:
             # 预测一次
@@ -227,7 +329,22 @@ class Exp_Classification(Exp_Basic):
         file_name = 'result_classification.txt'
         f = open(os.path.join(folder_path, file_name), 'a')
         f.write(setting + "  \n")
-        f.write('accuracy:{}'.format(accuracy))
+        # f.write('accuracy:{}'.format(accuracy))
+        f.write(f'accuracy: {metrics["accuracy"]}\n')
+        f.write(f'balanced_accuracy: {metrics.get("balanced_accuracy", np.nan)}\n')
+
+        if self.args.num_class == 2:
+            f.write(f'precision: {metrics.get("precision", np.nan)}\n')
+            f.write(f'recall: {metrics.get("recall", np.nan)}\n')
+            f.write(f'f1: {metrics.get("f1", np.nan)}\n')
+            f.write(f'auc: {metrics.get("auc", np.nan)}\n')
+            f.write(f'pr_auc: {metrics.get("pr_auc", np.nan)}\n')
+        else:
+            f.write(f'precision_macro: {metrics.get("precision_macro", np.nan)}\n')
+            f.write(f'recall_macro: {metrics.get("recall_macro", np.nan)}\n')
+            f.write(f'f1_macro: {metrics.get("f1_macro", np.nan)}\n')
+            f.write(f'auc_macro_ovr: {metrics.get("auc_macro_ovr", np.nan)}\n')
+            f.write(f'pr_auc_macro: {metrics.get("pr_auc_macro", np.nan)}\n')
         f.write('\n')
         f.write('\n')
         f.close()

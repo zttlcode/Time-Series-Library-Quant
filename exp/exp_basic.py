@@ -4,7 +4,7 @@ from models import (Autoformer, Transformer, TimesNet, Nonstationary_Transformer
                     Informer, LightTS, Reformer, ETSformer, Pyraformer, PatchTST, MICN, Crossformer, FiLM, iTransformer, \
                     Koopa, TiDE, FreTS, TimeMixer, TSMixer, SegRNN, MambaSimple, Mamba, TemporalFusionTransformer,
                     ClassCNN,
-                    ClassLSTM, CNN_LSTM)
+                    ClassLSTM, CNN_LSTM, XGB)
 
 
 class Exp_Basic(object):
@@ -38,7 +38,8 @@ class Exp_Basic(object):
             'TemporalFusionTransformer': TemporalFusionTransformer,
             'ClassCNN': ClassCNN,
             'ClassLSTM': ClassLSTM,
-            'CNN_LSTM': CNN_LSTM
+            'CNN_LSTM': CNN_LSTM,
+            'XGB': XGB
         }
         self.device = self._acquire_device()
         self.model = self._build_model().to(self.device)

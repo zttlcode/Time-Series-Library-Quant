@@ -26,7 +26,7 @@ def run_train(train_set_filepath, model_id):
                         help='task name, options:[long_term_forecast, short_term_forecast, imputation, classification, anomaly_detection]')
     parser.add_argument('--is_training', type=int, default=1, help='status')
     parser.add_argument('--model_id', type=str, default=model_id, help='model id')
-    parser.add_argument('--model', type=str, default='ClassLSTM',
+    parser.add_argument('--model', type=str, default='TimesNet',
                         help='model name, options: [Autoformer, Transformer, TimesNet]')  # ClassCNN  ClassLSTM  Informer Nonstationary_Transformer
 
     # data loader
@@ -578,23 +578,23 @@ if __name__ == '__main__':
     name = 'A_d'
     time_point_step = '160'
     handle_uneven_samples = 'True'
-    strategy_name = 'tea_radical_nature'  # fuzzy_nature tea_radical_nature
-    feature_plan_name = 'feature_all'
-    label_name = '_label2'  # _label1 _label2
-    model_id = name + '_ClassLSTM_' + strategy_name  # 区别不同训练系数  a800_60_market  A_15_tea  A_d_pred
+    strategy_name = 'tea_radical_nature'  # fuzzy_nature tea_radical_nature feature_all_v1 feature_basic_plus
+    feature_plan_name = 'feature_basic_plus'
+    label_name = '_label5'  # _label1 _label2
+    model_id = name + '_TimesNet_' + strategy_name  # 区别不同训练系数  a800_60_market  A_15_tea  A_d_pred
 
-    classification = 4
+    classification = 2
     classification_direction = 'buy'
 
-    # train(name,
-    #       time_point_step,
-    #       handle_uneven_samples,
-    #       strategy_name,
-    #       feature_plan_name,
-    #       label_name,
-    #       model_id,
-    #       classification,
-    #       classification_direction)
+    train(name,
+          time_point_step,
+          handle_uneven_samples,
+          strategy_name,
+          feature_plan_name,
+          label_name,
+          model_id,
+          classification,
+          classification_direction)
 
     # pred_market_type = False  # 预测行情 True 是3分类预测行情  False 是4分类预测交易点
     # inference(name,
@@ -608,10 +608,10 @@ if __name__ == '__main__':
     #           classification_direction,
     #           pred_market_type)
 
-    inference_live(name,
-                   time_point_step,
-                   strategy_name,
-                   feature_plan_name,
-                   model_id,
-                   classification,
-                   classification_direction)
+    # inference_live(name,
+    #                time_point_step,
+    #                strategy_name,
+    #                feature_plan_name,
+    #                model_id,
+    #                classification,
+    #                classification_direction)
