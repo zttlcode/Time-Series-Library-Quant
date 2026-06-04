@@ -10,14 +10,18 @@ import SQTool.Tools as SQTools
 import SQData.Identify_market_types_helper as IMTHelper
 
 # 你的基础通道：每个计划都保留
+# BASE_FEATURES = [
+#     'ema10', 'ema20', 'ema60',
+#     'macd', 'signal',
+#     'adx', 'plus_di', 'minus_di',
+#     'atr',
+#     'boll_mid', 'boll_upper', 'boll_lower',
+#     'rsi', 'obv', 'volume_ma5',
+#     'close', 'volume'
+# ]
 BASE_FEATURES = [
-    'ema10', 'ema20', 'ema60',
-    'macd', 'signal',
-    'adx', 'plus_di', 'minus_di',
-    'atr',
-    'boll_mid', 'boll_upper', 'boll_lower',
-    'rsi', 'obv', 'volume_ma5',
-    'close', 'volume'
+    'ret_5', 'hl_range', 'upper_wick_pct',
+    'volume', 'close'
 ]
 
 # 你要做组合搜索的候选池
@@ -67,8 +71,8 @@ def register_combo_plans(base_name, base_cols, pool, combo_sizes=(2, 3)):
 register_combo_plans(
     base_name="ftr",
     base_cols=BASE_FEATURES,
-    pool=DISTANCE_CANDIDATES,
-    combo_sizes=(1, 3)
+    pool=INTERACTION_CANDIDATES,
+    combo_sizes=(2, 3)
 )
 
 
@@ -848,6 +852,11 @@ def build_feature_bank_tea_radical_nature(data_0: pd.DataFrame) -> pd.DataFrame:
     # 先算你原来 feature_all 里用的基础指标
     df = IMTHelper.calculate_indicators(df)
 
+    # 我自己找的基础
+    df['ret_5'] = df['close'].pct_change(5)
+    df['hl_range'] = (df['high'] - df['low']) / df['close'].replace(0, np.nan)
+    df['upper_wick_pct'] = (df['high'] - df[['open', 'close']].max(axis=1)) / df['close'].replace(0, np.nan)
+
     eps = 1e-12
 
     # ===== 距离型特征 =====
@@ -932,6 +941,24 @@ def single_time_level_point_to_ts(assetList, temp_data_dict, temp_label_list, ti
         data_0['hl_range'] = (data_0['high'] - data_0['low']) / data_0['close'].replace(0, np.nan)
         data_0['upper_wick_pct'] = (data_0['high'] - data_0[['open', 'close']].max(axis=1)) / data_0[
             'close'].replace(0, np.nan)
+        # 先拿基础列
+        close = data_0['close']
+        high = data_0['high']
+        low = data_0['low']
+
+        # # ===== 距离型：最近 20 / 60 根区间的位置 =====
+        data_0['low_20'] = low.rolling(20).min()
+        data_0['high_20'] = high.rolling(20).max()
+
+        data_0['dist_to_low_20'] = close / data_0['low_20'].replace(0, np.nan) - 1.0
+        data_0['dist_to_high_20'] = close / data_0['high_20'].replace(0, np.nan) - 1.0
+        data_0['range_pos_20'] = (close - data_0['low_20']) / (
+                data_0['high_20'] - data_0['low_20']
+        ).replace(0, np.nan)
+
+        # 清理极值
+        data_0.replace([np.inf, -np.inf], np.nan, inplace=True)
+
     elif feature_plan_name == 'feature_basic_plus':
         data_0['ret_5'] = data_0['close'].pct_change(5)
 
@@ -1056,28 +1083,39 @@ def single_time_level_point_to_ts(assetList, temp_data_dict, temp_label_list, ti
                     upper_wick_pct = data_0_tmp["upper_wick_pct"]
                     close = data_0_tmp["close"]
                     volume = data_0_tmp["volume"]
-                    if (ret_5.isna().any()
-                            or hl_range.isna().any()
-                            or upper_wick_pct.isna().any()
-                            or volume.isna().any()
-                            or close.isna().any()
-                    ):
+                    dist_to_low_20 = data_0_tmp["dist_to_low_20"]
+                    dist_to_high_20 = data_0_tmp["dist_to_high_20"]
+                    range_pos_20 = data_0_tmp["range_pos_20"]
+
+                    check_cols = [
+                        ret_5, hl_range, upper_wick_pct, range_pos_20, dist_to_low_20, dist_to_high_20, volume, close
+                    ]
+                    if any(s.isna().any() for s in check_cols):
                         continue
+
                     cols = [
                         "ret_5",
                         "hl_range",
                         "upper_wick_pct",
+                        'dist_to_low_20',
+                        'dist_to_high_20',
+                        'range_pos_20',
                         "volume",
                         "close"
                     ]
                     arr = data_0_tmp[cols].to_numpy(dtype=float)
                     if not np.isfinite(arr).all():
                         continue
+
                     local_data_dict['ret_5'].append(ret_5)
                     local_data_dict['hl_range'].append(hl_range)
                     local_data_dict['upper_wick_pct'].append(upper_wick_pct)
+                    local_data_dict['dist_to_low_20'].append(dist_to_low_20)
+                    local_data_dict['dist_to_high_20'].append(dist_to_high_20)
+                    local_data_dict['range_pos_20'].append(range_pos_20)
                     local_data_dict['volume'].append(volume)
                     local_data_dict['close'].append(close)
+
                 elif feature_plan_name == 'feature_basic_plus':
                     ret_5 = data_0_tmp["ret_5"]
                     hl_range = data_0_tmp["hl_range"]
@@ -1535,6 +1573,9 @@ def get_feature(feature_plan_name):
             'ret_5': [],
             'hl_range': [],
             'upper_wick_pct': [],
+            'dist_to_low_20': [],
+            'dist_to_high_20': [],
+            'range_pos_20': [],
             'volume': [],
             'close': []
         }
@@ -1948,11 +1989,11 @@ def prepare_train_dataset():
     """
     prepare_dataset("_TRAIN", "A_d", 160,
                     50000, True,
-                    "tea_radical_nature", "feature_basic_plus",
+                    "tea_radical_nature", "feature_all",
                     None, "point_to_ts_single", "_label5", 2, "buy")
     prepare_dataset("_TEST", "A_d", 160,
                     10000, True,
-                    "tea_radical_nature", "feature_basic_plus",
+                    "tea_radical_nature", "feature_all",
                     None, "point_to_ts_single", "_label5", 2, "buy")
 
 

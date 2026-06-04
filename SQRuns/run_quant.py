@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 
 
-def run_train(train_set_filepath, model_id, feature_plan_name):
+def run_train(train_set_filepath, model_id, model_name, feature_plan_name):
     fix_seed = 2021
     random.seed(fix_seed)
     torch.manual_seed(fix_seed)
@@ -25,8 +25,8 @@ def run_train(train_set_filepath, model_id, feature_plan_name):
                         help='task name, options:[long_term_forecast, short_term_forecast, imputation, classification, anomaly_detection]')
     parser.add_argument('--is_training', type=int, default=1, help='status')
     parser.add_argument('--model_id', type=str, default=model_id, help='model id')
-    parser.add_argument('--model', type=str, default='TimesNet',
-                        help='model name, options: [Autoformer, Transformer, TimesNet]')  # ClassCNN  ClassLSTM  Informer Nonstationary_Transformer
+    parser.add_argument('--model', type=str, default=model_name,
+                        help='model name, options: [Autoformer, Transformer, TimesNet]')
 
     # data loader
     parser.add_argument('--data', type=str, default='UEA', help='dataset type')
@@ -231,7 +231,7 @@ def run_train(train_set_filepath, model_id, feature_plan_name):
         torch.cuda.empty_cache()
 
 
-def run_predict(pred_set_filepath, model_id, time_point_step, asset_code, pred_market, strategy_name):
+def run_predict(pred_set_filepath, model_id, model_name, time_point_step, asset_code, pred_market, strategy_name):
     fix_seed = 2021
     random.seed(fix_seed)
     torch.manual_seed(fix_seed)
@@ -244,7 +244,7 @@ def run_predict(pred_set_filepath, model_id, time_point_step, asset_code, pred_m
                         help='task name, options:[long_term_forecast, short_term_forecast, imputation, classification, anomaly_detection]')
     parser.add_argument('--is_training', type=int, default=0, help='status')
     parser.add_argument('--model_id', type=str, default=model_id, help='model id')
-    parser.add_argument('--model', type=str, default='ClassLSTM',
+    parser.add_argument('--model', type=str, default=model_name,
                         help='model name, options: [Autoformer, Transformer, TimesNet]')  # ClassCNN  ClassLSTM  Informer
 
     # data loader
@@ -461,6 +461,7 @@ def train(name,
           plan_count,
           label_name,
           model_id,
+          model_name,
           classification,
           classification_direction):
     if plan_count is not None:
@@ -476,7 +477,7 @@ def train(name,
         problem_name_str = ("_" + name + "_" + str(strategy_name) + "_" + str(temp_file_feature_name) + "_" +
                             str(handle_uneven_samples) + "U" + str(label_name) + "_" + str(time_point_step) + "S")
 
-    run_train(problem_name_str, model_id, feature_plan_name)
+    run_train(problem_name_str, model_id, model_name, feature_plan_name)
 
 
 def inference(name,
@@ -486,6 +487,7 @@ def inference(name,
               feature_plan_name,
               label_name,
               model_id,
+              model_name,
               classification,
               classification_direction,
               pred_market_type):
@@ -518,7 +520,7 @@ def inference(name,
                             + str(handle_uneven_samples) + "_uneven" + str(label_name) + "_"
                             + str(time_point_step) + "step")
         try:
-            run_predict(problem_name_str, model_id, time_point_step, asset_code, pred_market_type, None)
+            run_predict(problem_name_str, model_id, model_name, time_point_step, asset_code, pred_market_type, None)
         except Exception as e:
             print(e)
             continue
@@ -532,6 +534,7 @@ def inference_live(name,
                    strategy_name,
                    feature_plan_name,
                    model_id,
+                   model_name,
                    classification,
                    classification_direction):
     # ===== 本地 CSV 目录 =====
@@ -573,5 +576,5 @@ def inference_live(name,
                             + str(data[3]) + "_" + str(data[5])
                             + "_" + str(strategy_name) + "_" + str(feature_plan_name) + "_"
                             + str(time_point_step) + "_step")
-        run_predict(problem_name_str, model_id, time_point_step, str(data[3]), False, strategy_name)
+        run_predict(problem_name_str, model_id, model_name, time_point_step, str(data[3]), False, strategy_name)
 

@@ -330,7 +330,8 @@ class Exp_Classification(Exp_Basic):
         f = open(os.path.join(folder_path, file_name), 'a')
         f.write(setting + "  \n")
         # f.write('accuracy:{}'.format(accuracy))
-        f.write(f'feature_plan_name: {feature_plan_name}\n')
+        if feature_plan_name is not None:
+            f.write(f'feature_plan_name: {feature_plan_name}\n')
         f.write(f'accuracy: {metrics["accuracy"]}\n')
         f.write(f'balanced_accuracy: {metrics.get("balanced_accuracy", np.nan)}\n')
 
