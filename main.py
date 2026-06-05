@@ -82,7 +82,7 @@ if __name__ == '__main__':
     time_point_step = '160'
     handle_uneven_samples = 'True'
     strategy_name = 'fuzzy_ma'  # fuzzy_ma tea_radical_nature
-    feature_plan_name = 'feature_fuzzy_ma'  # feature_all feature_tea_radical_nature feature_fuzzy_ma feature_basic_plus
+    feature_plan_name = 'feature_fuzzy_ma'  # feature_all feature_tea_radical_nature feature_fuzzy_ma feature_test
     label_name = '_label2'  # _label2 _label5
     model_name = 'TimesNet'  # ClassCNN  ClassLSTM  Informer Nonstationary_Transformer
     model_id = name + '_' + model_name + '_' + strategy_name  # 区别不同训练系数  a800_60_market  A_15_tea  A_d_pred
