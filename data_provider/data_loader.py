@@ -683,13 +683,38 @@ class UEAloader(Dataset):
 
         return all_df, labels_df
 
+    def _read_ts_class_names(self, filepath):
+        class_names = None
+        with open(filepath, "r", encoding="utf-8") as f:
+            for line in f:
+                s = line.strip()
+                if not s:
+                    continue
+                if s.lower().startswith("@classlabel"):
+                    parts = s.split()
+                    # 例如：@classLabel true 1 2 3 4
+                    if len(parts) >= 3 and parts[1].lower() == "true":
+                        class_names = [str(x) for x in parts[2:]]
+                    else:
+                        class_names = []
+                    break
+        if class_names is None:
+            raise ValueError(f"Cannot find @classLabel in {filepath}")
+        return class_names
+
     def load_single(self, filepath):
         df, labels = load_from_tsfile_to_dataframe(filepath, return_separate_X_and_y=True,
                                                              replace_missing_vals_with='NaN')
-        labels = pd.Series(labels, dtype="category")
-        self.class_names = labels.cat.categories
-        labels_df = pd.DataFrame(labels.cat.codes,
-                                 dtype=np.int8)  # int8-32 gives an error when using nn.CrossEntropyLoss
+        # labels = pd.Series(labels, dtype="category")
+        # self.class_names = labels.cat.categories
+        # labels_df = pd.DataFrame(labels.cat.codes,
+        #                          dtype=np.int8)  # int8-32 gives an error when using nn.CrossEntropyLoss
+        # 关键：从 ts 头部读取完整类别空间，而不是从当前文件实际标签推断
+        # 20260605，为修复类别压缩问题，注释上面三行，新增下面4行，直接从文件读取分类
+        self.class_names = self._read_ts_class_names(filepath)
+        label_to_idx = {name: i for i, name in enumerate(self.class_names)}
+        labels = pd.Series([str(x) for x in labels])
+        labels_df = pd.DataFrame(labels.map(label_to_idx).astype(np.int64))
 
         lengths = df.applymap(
             lambda x: len(x)).values  # (num_samples, num_dimensions) array containing the length of each series

@@ -231,7 +231,7 @@ def run_train(train_set_filepath, model_id, model_name, feature_plan_name):
         torch.cuda.empty_cache()
 
 
-def run_predict(pred_set_filepath, model_id, model_name, time_point_step, asset_code, pred_market, strategy_name):
+def run_predict(pred_set_filepath, model_id, model_name, time_point_step, asset_code, pred_market, strategy_name, pred_live=False):
     fix_seed = 2021
     random.seed(fix_seed)
     torch.manual_seed(fix_seed)
@@ -449,7 +449,7 @@ def run_predict(pred_set_filepath, model_id, model_name, time_point_step, asset_
 
         exp = Exp(args)  # set experiments
         print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
-        exp.test(setting, test=1, asset_code=asset_code, pred_market=pred_market)
+        exp.test(setting, test=1, asset_code=asset_code, pred_market=pred_market, pred_live=True)
         torch.cuda.empty_cache()
 
 
@@ -576,5 +576,5 @@ def inference_live(name,
                             + str(data[3]) + "_" + str(data[5])
                             + "_" + str(strategy_name) + "_" + str(feature_plan_name) + "_"
                             + str(time_point_step) + "_step")
-        run_predict(problem_name_str, model_id, model_name, time_point_step, str(data[3]), False, strategy_name)
+        run_predict(problem_name_str, model_id, model_name, time_point_step, str(data[3]), False, strategy_name, True)
 

@@ -220,23 +220,33 @@ def run_nature_prepare_dataset(strategy_name):
 
         # ===== Step 3: 处理行情数据 =====
         try:
-            code = str(data[3])
-            name = data[4]
-            if code.startswith("5") or code.startswith("6"):
-                code = "sh" + code
-            elif code.startswith("1") or code.startswith("0") or code.startswith("3"):
-                code = "sz" + code
-            data_0 = ak.stock_zh_a_hist_tx(symbol=code, start_date="20250101", adjust="qfq")
-            if len(data_0) < 250:
-                print(name, "数据不够250")
+            # code = str(data[3])
+            # name = data[4]
+            # if code.startswith("5") or code.startswith("6"):
+            #     code = "sh" + code
+            # elif code.startswith("1") or code.startswith("0") or code.startswith("3"):
+            #     code = "sz" + code
+            # data_0 = ak.stock_zh_a_hist_tx(symbol=code, start_date="20250101", adjust="qfq")
+            # if len(data_0) < 250:
+            #     print(name, "数据不够250")
+            #     continue
+            # data_0.rename(
+            #     columns={
+            #         'date': 'time',
+            #         'amount': 'volume'
+            #     },
+            #     inplace=True
+            # )
+            csv_path = assetList[-1].barEntity.live_bar
+            if not os.path.exists(csv_path):
+                print(f"文件不存在，跳过 {assetList[-1].assetsCode}: {csv_path}")
                 continue
-            data_0.rename(
-                columns={
-                    'date': 'time',
-                    'amount': 'volume'
-                },
-                inplace=True
-            )
+            # 读取 CSV（有表头）
+            data_0 = pd.read_csv(csv_path)
+            # 处理数据类型（与 run_daily 保持一致）
+            data_0['time'] = pd.to_datetime(data_0['time'])
+            # 统一裁剪数据
+            data_0 = data_0.reset_index(drop=True)
         except Exception as e:
             print(f"无法解析行情数据 {csv_file}: {e}")
             continue
@@ -250,8 +260,8 @@ def run_nature_prepare_dataset_ssh(strategy_name):
     username = "root"
     password = "zhao1993"
     docker_container_id = "39fd5ffe1497"
-    live_dir = "/home/RobotMeQ/QuantData/live_to_ts/"  # Docker 内的 CSV 目录
-    local_backup_dir = "D:\\github\\RobotMeQ\\QuantData\\live_to_ts\\"  # 本地备份目录
+    live_dir = "/home/RobotMeQ_Dataset/QuantData/live_to_ts/"  # Docker 内的 CSV 目录
+    local_backup_dir = "D:\\github\\RobotMeQ_Dataset\\QuantData\\live_to_ts\\"  # 本地备份目录
 
     # 连接服务器
     client = paramiko.SSHClient()
@@ -310,7 +320,7 @@ def run_nature_prepare_dataset_ssh(strategy_name):
                 data[8]
             )
             # **获取 live_bar 文件路径**
-            live_bar = "/home/RobotMeQ/QuantData/live/live_bar_"+data[8]+"_"+data[3]+"_"+data[5]+".csv"
+            live_bar = "/home/RobotMeQ_Dataset/QuantData/live/live_bar_"+data[8]+"_"+data[3]+"_"+data[5]+".csv"
 
             # # **读取 live_bar 文件内容**
             command_read_live_bar = f"docker exec {docker_container_id} cat {live_bar}"
@@ -344,7 +354,7 @@ def run_nature_prepare_dataset_ssh(strategy_name):
 
 def run_live_get_pred(strategy_name):
     # ===== 本地 CSV 目录 =====
-    local_live_dir = r"D:\github\RobotMeQ\QuantData\live_to_ts"
+    local_live_dir = r"D:\github\RobotMeQ_Dataset\QuantData\live_to_ts"
 
     # 获取目录下所有 csv 文件
     csv_files = [f for f in os.listdir(local_live_dir) if f.endswith(".csv") and f.startswith(strategy_name)]
@@ -384,16 +394,25 @@ def run_live_get_pred(strategy_name):
         else:
             print(f"{csv_file} 的 data 长度不足 9，跳过备份")
 
-        df_prd_true_filePath = "D:/github/Time-Series-Library-Quant/results/" + data[3] + "_prd_result.csv"
+        prob_df_path = SQTools.read_config("SQData", "inference_live")
+        df_prd_true_filePath = prob_df_path + data[3] + "_prd_result.csv"
+        df_prd_prob_filePath = prob_df_path + data[3] + "_prd_prob.csv"
         if not os.path.exists(df_prd_true_filePath):
             print(data[3] + "预测结果文件不存在")
+            continue
+
+        if not os.path.exists(df_prd_prob_filePath):
+            print(data[3] + "预测概率文件不存在")
             continue
 
         # 只有预测文件存在，才认为这个 CSV 被成功消费
         csv_files_to_delete.add(csv_file)
 
         df_prd_true = pd.read_csv(df_prd_true_filePath)
-        prd_result_files_to_delete.add(df_prd_true_filePath)  # 在 for 循环中，确认文件存在后，记录文件路径
+        df_prd_prob = pd.read_csv(df_prd_prob_filePath)
+        # 在 for 循环中，确认文件存在后，记录文件路径
+        prd_result_files_to_delete.add(df_prd_true_filePath)
+        prd_result_files_to_delete.add(df_prd_prob_filePath)
         # 从仓位管理中删除未达标的仓位
         symbol = data[3]  # 如 sh510300
         timeframe = data[5]  # 如 d
@@ -404,6 +423,9 @@ def run_live_get_pred(strategy_name):
             position_keys_protected.add(position_key)
 
             # 组装消息
+            max_prob = float(df_prd_prob.iloc[0, 0:4].max())
+            max_prob_class_idx = int(df_prd_prob.iloc[0, 0:4].values.argmax()) + 1
+
             post_msg = (data[4]
                         + "-"
                         + data[3]
@@ -412,7 +434,12 @@ def run_live_get_pred(strategy_name):
                         + "：" + data[2] + "："
                         + str(data[1])
                         + " 时间："
-                        + data[0])
+                        + data[0]
+                        + " 最高概率："
+                        + f"{max_prob:.4f}"
+                        + "（类"
+                        + str(max_prob_class_idx)
+                        + "）")
             if data[3] not in temp_result_dict:
                 temp_result_dict[data[3]] = []
             temp_result_dict[data[3]].append(post_msg)
@@ -423,7 +450,7 @@ def run_live_get_pred(strategy_name):
         pred_live_symbols_to_delete.add(symbol)
 
     # 备份每日预测结果
-    backup_dir = r"D:\github\RobotMeQ\QuantData\live_to_ts_pred_backup"
+    backup_dir = r"D:\github\RobotMeQ_Dataset\QuantData\live_to_ts_pred_backup"
     os.makedirs(backup_dir, exist_ok=True)
 
     backup_columns = [
@@ -494,7 +521,7 @@ def run_live_get_pred(strategy_name):
 
     # 删除实盘仓位中未匹配的交易点，只保留分类正确的交易点
     final_position_keys_to_delete = position_keys_to_delete - position_keys_protected
-    position_dir = r"D:\github\RobotMeQ\QuantData\position_currentOrders_" + strategy_name
+    position_dir = r"D:\github\RobotMeQ_Dataset\QuantData\position_currentOrders_" + strategy_name
 
     for key in final_position_keys_to_delete:
         file_path = os.path.join(position_dir, f"position_{key}.json")

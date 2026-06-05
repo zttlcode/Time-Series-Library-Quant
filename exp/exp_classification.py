@@ -18,6 +18,7 @@ from sklearn.metrics import (
     balanced_accuracy_score
 )
 from sklearn.preprocessing import label_binarize
+import SQTool.Tools as SQTools
 
 warnings.filterwarnings('ignore')
 
@@ -249,7 +250,7 @@ class Exp_Classification(Exp_Basic):
 
         return self.model
 
-    def test(self, setting, test=0, asset_code=None, pred_market=False, feature_plan_name=None):
+    def test(self, setting, test=0, asset_code=None, pred_market=False, feature_plan_name=None, pred_live=False):
         test_data, test_loader = self._get_data(flag='TEST')
         if test:
             print('loading model')
@@ -289,6 +290,14 @@ class Exp_Classification(Exp_Basic):
         predictions = np.argmax(probs, axis=1)
         trues = trues.flatten().cpu().numpy()
 
+        # # 打印每个样本的所有类别概率
+        # if pred_live:
+        #     probs = torch.softmax(preds, dim=1).cpu().numpy()
+        #     print("class 1 prob:", probs[0][0])
+        #     print("class 2 prob:", probs[0][1])
+        #     print("class 3 prob:", probs[0][2])
+        #     print("class 4 prob:", probs[0][3])
+
         metrics = self._compute_metrics(trues, probs, predictions)
         accuracy = metrics["accuracy"]
 
@@ -314,11 +323,34 @@ class Exp_Classification(Exp_Basic):
             else:
                 df = pd.DataFrame({'trues': decoded_trues, 'predictions': decoded_predictions})
                 # 保存为CSV文件
-                df.to_csv('./results/'+asset_code+'_prd_result.csv', index=False)
+                prob_df_path = SQTools.read_config("SQData", "inference_live")
+                os.makedirs(prob_df_path, exist_ok=True)
+                df.to_csv(prob_df_path + asset_code + '_prd_result.csv', index=False)
+
                 # # 过滤出Column1为0或2的行
                 # filtered_df = df[df['trues'].isin([0, 2])]
                 # # 保存到新的CSV文件
                 # filtered_df.to_csv('./results/filtered_output.csv', index=False)
+                if pred_live:
+                    # 预测概率
+                    probs = torch.softmax(preds, dim=1).cpu().numpy()
+                    # 四个类别概率，按你的类别顺序对应下标 0,1,2,3
+                    if self.args.num_class == 2:
+                        prob_df = pd.DataFrame({
+                            'class1': [probs[0][0]],
+                            'class2': [probs[0][1]],
+                        })
+                    else:
+                        prob_df = pd.DataFrame({
+                            'class1': [probs[0][0]],
+                            'class2': [probs[0][1]],
+                            'class3': [probs[0][2]],
+                            'class4': [probs[0][3]],
+                        })
+                    prob_df_path = SQTools.read_config("SQData", "inference_live")
+                    os.makedirs(prob_df_path, exist_ok=True)
+                    # 保存概率文件
+                    prob_df.to_csv(f'{prob_df_path}{asset_code}_prd_prob.csv', index=False)
 
         # result save
         folder_path = './results/' + setting + '/'
