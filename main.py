@@ -89,20 +89,20 @@ if __name__ == '__main__':
     classification = 4
     classification_direction = 'buy'
 
-    # 单独组装训练集
-    SQDataset.prepare_train_dataset()
-    # 单次运行训练
-    run_quant.train(name,
-                    time_point_step,
-                    handle_uneven_samples,
-                    strategy_name,
-                    feature_plan_name,
-                    None,
-                    label_name,
-                    model_id,
-                    model_name,
-                    classification,
-                    classification_direction)
+    # # 单独组装训练集
+    # SQDataset.prepare_train_dataset()
+    # # 单次运行训练
+    # run_quant.train(name,
+    #                 time_point_step,
+    #                 handle_uneven_samples,
+    #                 strategy_name,
+    #                 feature_plan_name,
+    #                 None,
+    #                 label_name,
+    #                 model_id,
+    #                 model_name,
+    #                 classification,
+    #                 classification_direction)
     # 单次运行推理
     # run_quant.inference(name,
     #                     time_point_step,
@@ -115,15 +115,15 @@ if __name__ == '__main__':
     #                     classification,
     #                     classification_direction,
     #                     pred_market_type=False)  # 预测行情 True 是3分类预测行情  False 是4分类预测交易点
-    # # 实盘运行推理
-    # run_quant.inference_live(name,
-    #                          time_point_step,
-    #                          strategy_name,
-    #                          feature_plan_name,
-    #                          model_id,
-    #                          model_name,
-    #                          classification,
-    #                          classification_direction)
+    # 实盘运行推理
+    run_quant.inference_live(name,
+                             time_point_step,
+                             strategy_name,
+                             feature_plan_name,
+                             model_id,
+                             model_name,
+                             classification,
+                             classification_direction)
 
     """
     功能：时序模型数据处理

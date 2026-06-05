@@ -538,7 +538,7 @@ def inference_live(name,
                    classification,
                    classification_direction):
     # ===== 本地 CSV 目录 =====
-    local_live_dir = r"D:\github\RobotMeQ\QuantData\live_to_ts"
+    local_live_dir = r"D:\github\RobotMeQ_Dataset\QuantData\live_to_ts"
 
     # 获取目录下所有 csv 文件
     csv_files = [f for f in os.listdir(local_live_dir) if f.endswith(".csv") and f.startswith(strategy_name)]
