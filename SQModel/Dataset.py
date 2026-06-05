@@ -10,18 +10,19 @@ import SQTool.Tools as SQTools
 import SQData.Identify_market_types_helper as IMTHelper
 
 # 你的基础通道：每个计划都保留
-# BASE_FEATURES = [
-#     'ema10', 'ema20', 'ema60',
-#     'macd', 'signal',
-#     'adx', 'plus_di', 'minus_di',
-#     'atr',
-#     'boll_mid', 'boll_upper', 'boll_lower',
-#     'rsi', 'obv', 'volume_ma5',
-#     'close', 'volume'
-# ]
 BASE_FEATURES = [
-    'ret_5', 'hl_range', 'upper_wick_pct',
-    'volume', 'close'
+    'ema10', 'ema20', 'ema60',
+    'macd', 'signal',
+    'adx', 'plus_di', 'minus_di',
+    'atr',
+    'boll_mid', 'boll_upper', 'boll_lower',
+    'rsi', 'obv', 'volume_ma5',
+    'close', 'volume'
+]
+
+# 自己攒的特征
+USUAL_FEATURES = [
+    'ret_5', 'hl_range', 'upper_wick_pct'
 ]
 
 # 你要做组合搜索的候选池
@@ -67,12 +68,12 @@ def register_combo_plans(base_name, base_cols, pool, combo_sizes=(2, 3)):
             FEATURE_PLAN_SPECS[plan_name] = base_cols + list(comb)
 
 
-# 只注册你想扫的这一类  combo_sizes=(1, )表示基础特征 组合1个特征， (1, 3) 表示组合1个特征、所有3个特征，这个combo_sizes必须是元组
+# 只注册你想扫的这一类
 register_combo_plans(
     base_name="ftr",
     base_cols=BASE_FEATURES,
     pool=INTERACTION_CANDIDATES,
-    combo_sizes=(2, 3)
+    combo_sizes=(1, 2)
 )
 
 
@@ -934,57 +935,7 @@ def single_time_level_point_to_ts(assetList, temp_data_dict, temp_label_list, ti
     data_0 = pd.read_csv(data_0_filepath, index_col="time", parse_dates=True)
 
     # 计算所有指标
-    if feature_plan_name == 'feature_all':
-        data_0 = IMTHelper.calculate_indicators(data_0)
-    elif feature_plan_name == 'feature_tea_radical_nature':
-        data_0['ret_5'] = data_0['close'].pct_change(5)
-        data_0['hl_range'] = (data_0['high'] - data_0['low']) / data_0['close'].replace(0, np.nan)
-        data_0['upper_wick_pct'] = (data_0['high'] - data_0[['open', 'close']].max(axis=1)) / data_0[
-            'close'].replace(0, np.nan)
-        # 先拿基础列
-        close = data_0['close']
-        high = data_0['high']
-        low = data_0['low']
-
-        # # ===== 距离型：最近 20 / 60 根区间的位置 =====
-        data_0['low_20'] = low.rolling(20).min()
-        data_0['high_20'] = high.rolling(20).max()
-
-        data_0['dist_to_low_20'] = close / data_0['low_20'].replace(0, np.nan) - 1.0
-        data_0['dist_to_high_20'] = close / data_0['high_20'].replace(0, np.nan) - 1.0
-        data_0['range_pos_20'] = (close - data_0['low_20']) / (
-                data_0['high_20'] - data_0['low_20']
-        ).replace(0, np.nan)
-
-        # 清理极值
-        data_0.replace([np.inf, -np.inf], np.nan, inplace=True)
-
-    elif feature_plan_name == 'feature_basic_plus':
-        data_0['ret_5'] = data_0['close'].pct_change(5)
-
-        data_0['hl_range'] = (data_0['high'] - data_0['low']) / data_0['close'].replace(0, np.nan)
-        data_0['upper_wick_pct'] = (data_0['high'] - data_0[['open', 'close']].max(axis=1)) / data_0[
-            'close'].replace(0, np.nan)
-        # 先拿基础列
-        close = data_0['close']
-        open_ = data_0['open']
-        high = data_0['high']
-        low = data_0['low']
-        volume = data_0['volume']
-
-        # # ===== 距离型：最近 20 / 60 根区间的位置 =====
-        data_0['low_20'] = low.rolling(20).min()
-        data_0['high_20'] = high.rolling(20).max()
-
-        data_0['dist_to_low_20'] = close / data_0['low_20'].replace(0, np.nan) - 1.0
-        data_0['dist_to_high_20'] = close / data_0['high_20'].replace(0, np.nan) - 1.0
-        data_0['range_pos_20'] = (close - data_0['low_20']) / (
-                data_0['high_20'] - data_0['low_20']
-        ).replace(0, np.nan)
-        # 清理极值
-        data_0.replace([np.inf, -np.inf], np.nan, inplace=True)
-    elif feature_plan_name in FEATURE_PLAN_SPECS:
-        data_0 = build_feature_bank_tea_radical_nature(data_0)
+    data_0 = build_feature_bank_tea_radical_nature(data_0)
     # 处理Nan
     data_0.bfill(inplace=True)  # 用后一个非NaN值填充（后向填充）
     data_0.ffill(inplace=True)  # 用前一个非NaN值填充（前向填充）
@@ -1115,45 +1066,105 @@ def single_time_level_point_to_ts(assetList, temp_data_dict, temp_label_list, ti
                     local_data_dict['range_pos_20'].append(range_pos_20)
                     local_data_dict['volume'].append(volume)
                     local_data_dict['close'].append(close)
-
-                elif feature_plan_name == 'feature_basic_plus':
-                    ret_5 = data_0_tmp["ret_5"]
-                    hl_range = data_0_tmp["hl_range"]
-                    upper_wick_pct = data_0_tmp["upper_wick_pct"]
-                    close = data_0_tmp["close"]
+                elif feature_plan_name == 'feature_fuzzy_ma':
+                    plus_di = data_0_tmp["plus_di"]
+                    minus_di = data_0_tmp["minus_di"]
+                    rsi = data_0_tmp["rsi"]
+                    obv = data_0_tmp["obv"]
                     volume = data_0_tmp["volume"]
-
-                    dist_to_low_20 = data_0_tmp["dist_to_low_20"]
-                    dist_to_high_20 = data_0_tmp["dist_to_high_20"]
+                    close = data_0_tmp["close"]
+                    close_ma5_ratio = data_0_tmp["close_ma5_ratio"]
                     range_pos_20 = data_0_tmp["range_pos_20"]
+                    body_to_range = data_0_tmp["body_to_range"]
+                    check_cols = [
+                        plus_di, minus_di, rsi, obv, close_ma5_ratio, range_pos_20, body_to_range,
+                        volume, close
+                    ]
+                    if any(s.isna().any() for s in check_cols):
+                        continue
+                    cols = [
+                        'plus_di',
+                        'minus_di',
+                        'rsi',
+                        'obv',
+                        "volume",
+                        "close",
+                        "close_ma5_ratio",
+                        "range_pos_20",
+                        "body_to_range"
+                    ]
+                    arr = data_0_tmp[cols].to_numpy(dtype=float)
+                    if not np.isfinite(arr).all():
+                        continue
+                    local_data_dict['plus_di'].append(plus_di)
+                    local_data_dict['minus_di'].append(minus_di)
+                    local_data_dict['rsi'].append(rsi)
+                    local_data_dict['obv'].append(obv)
+                    local_data_dict['volume'].append(volume)
+                    local_data_dict['close'].append(close)
+                    local_data_dict['close_ma5_ratio'].append(close_ma5_ratio)
+                    local_data_dict['range_pos_20'].append(range_pos_20)
+                    local_data_dict['body_to_range'].append(body_to_range)
+                elif feature_plan_name == 'feature_basic_plus':
+                    # ret_5 = data_0_tmp["ret_5"]
+                    # hl_range = data_0_tmp["hl_range"]
+                    # upper_wick_pct = data_0_tmp["upper_wick_pct"]
+                    plus_di = data_0_tmp["plus_di"]
+                    minus_di = data_0_tmp["minus_di"]
+                    # dist_to_low_20 = data_0_tmp["dist_to_low_20"]
+                    # dist_to_high_20 = data_0_tmp["dist_to_high_20"]
+                    rsi = data_0_tmp["rsi"]
+                    obv = data_0_tmp["obv"]
+
+                    # dist_to_low_20 = data_0_tmp["dist_to_low_20"]
+                    volume = data_0_tmp["volume"]
+                    close = data_0_tmp["close"]
+                    close_ma5_ratio = data_0_tmp["close_ma5_ratio"]
+                    range_pos_20 = data_0_tmp["range_pos_20"]
+                    body_to_range = data_0_tmp["body_to_range"]
 
                     check_cols = [
-                        ret_5, hl_range, upper_wick_pct, range_pos_20, dist_to_low_20, dist_to_high_20, volume, close
+                        # ret_5, hl_range, upper_wick_pct, range_pos_20, dist_to_low_20, dist_to_high_20,
+                        plus_di, minus_di, rsi, obv, close_ma5_ratio, range_pos_20, body_to_range,
+                        volume, close
                     ]
 
                     if any(s.isna().any() for s in check_cols):
                         continue
                     cols = [
-                        "ret_5",
-                        "hl_range",
-                        "upper_wick_pct",
-                        'dist_to_low_20',
-                        'dist_to_high_20',
-                        'range_pos_20',
+                        # "ret_5",
+                        # "hl_range",
+                        # "upper_wick_pct",
+                        'plus_di',
+                        'minus_di',
+                        'rsi',
+                        'obv',
                         "volume",
-                        "close"
+                        "close",
+                        "close_ma5_ratio",
+                        "range_pos_20",
+                        "body_to_range"
+
                     ]
                     arr = data_0_tmp[cols].to_numpy(dtype=float)
                     if not np.isfinite(arr).all():
                         continue
-                    local_data_dict['ret_5'].append(ret_5)
-                    local_data_dict['hl_range'].append(hl_range)
-                    local_data_dict['upper_wick_pct'].append(upper_wick_pct)
-                    local_data_dict['dist_to_low_20'].append(dist_to_low_20)
-                    local_data_dict['dist_to_high_20'].append(dist_to_high_20)
-                    local_data_dict['range_pos_20'].append(range_pos_20)
+                    # local_data_dict['ret_5'].append(ret_5)
+                    # local_data_dict['hl_range'].append(hl_range)
+                    # local_data_dict['upper_wick_pct'].append(upper_wick_pct)
+                    # local_data_dict['dist_to_low_20'].append(dist_to_low_20)
+                    # local_data_dict['dist_to_high_20'].append(dist_to_high_20)
+
+                    local_data_dict['plus_di'].append(plus_di)
+                    local_data_dict['minus_di'].append(minus_di)
+                    local_data_dict['rsi'].append(rsi)
+                    local_data_dict['obv'].append(obv)
+
                     local_data_dict['volume'].append(volume)
                     local_data_dict['close'].append(close)
+                    local_data_dict['close_ma5_ratio'].append(close_ma5_ratio)
+                    local_data_dict['range_pos_20'].append(range_pos_20)
+                    local_data_dict['body_to_range'].append(body_to_range)
                 elif feature_plan_name in FEATURE_PLAN_SPECS:
                     cols = FEATURE_PLAN_SPECS[feature_plan_name]
                     arr = data_0_tmp[cols].to_numpy(dtype=float)
@@ -1216,7 +1227,6 @@ def single_time_level_point_to_ts(assetList, temp_data_dict, temp_label_list, ti
         temp_label_list.append(local_label_list[i])
 
     # print(assetList[0].assetsCode, "结束", len(temp_label_list))
-    # print(labeled['label'].value_counts())
     # print(pd.Series(temp_label_list).value_counts())
 
     return "success"
@@ -1579,18 +1589,29 @@ def get_feature(feature_plan_name):
             'volume': [],
             'close': []
         }
-    elif feature_plan_name == 'feature_basic_plus':
+    elif feature_plan_name == 'feature_fuzzy_ma':  # 这个放置顺序会影响训练准确率
         return {
-            'ret_5': [],
-            'hl_range': [],
-            'upper_wick_pct': [],
-
-            'dist_to_low_20': [],
-            'dist_to_high_20': [],
-            'range_pos_20': [],
-
+            'plus_di': [],
+            'minus_di': [],
+            'rsi': [],
+            'obv': [],
             'volume': [],
-            'close': []
+            'close': [],
+            'close_ma5_ratio': [],
+            'range_pos_20': [],
+            'body_to_range': []
+        }
+    elif feature_plan_name == 'feature_basic_plus':  # 这个放置顺序会影响训练准确率
+        return {
+            'plus_di': [],
+            'minus_di': [],
+            'rsi': [],
+            'obv': [],
+            'volume': [],
+            'close': [],
+            'close_ma5_ratio': [],
+            'range_pos_20': [],
+            'body_to_range': []
         }
     elif feature_plan_name == 'feature_extremum':
         return {'open': [], 'high': [], 'low': [], 'close': [], 'volume': []}
@@ -1989,12 +2010,12 @@ def prepare_train_dataset():
     """
     prepare_dataset("_TRAIN", "A_d", 160,
                     50000, True,
-                    "tea_radical_nature", "feature_all",
-                    None, "point_to_ts_single", "_label5", 2, "buy")
+                    "fuzzy_ma", "feature_fuzzy_ma",
+                    None, "point_to_ts_single", "_label2", 4, "buy")
     prepare_dataset("_TEST", "A_d", 160,
                     10000, True,
-                    "tea_radical_nature", "feature_all",
-                    None, "point_to_ts_single", "_label5", 2, "buy")
+                    "fuzzy_ma", "feature_fuzzy_ma",
+                    None, "point_to_ts_single", "_label2", 4, "buy")
 
 
 def prepare_pred_dataset():
