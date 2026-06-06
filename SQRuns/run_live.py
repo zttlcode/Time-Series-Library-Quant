@@ -6,6 +6,8 @@ import csv
 import os
 import paramiko
 import io
+import csv
+
 import glob
 from sktime.datasets import write_dataframe_to_tsfile
 import shutil
@@ -418,13 +420,42 @@ def run_live_get_pred(strategy_name):
         timeframe = data[5]  # 如 d
         position_key = f"{symbol}_{timeframe}"
 
+        # ===== 先把当前交易点写入实盘推理结果文件（无论预测对错都写）=====
+        # 最大概率类别（1~4）
+        max_prob_class_idx = int(df_prd_prob.iloc[0, 0:4].values.argmax()) + 1
+        # 最大概率值
+        max_prob = round(float(df_prd_prob.iloc[0, 0:4].max()), 3)
+
+        # 组装成：2023-01-16 00:00:00,4.22,sell,3.0,0.899 这种格式
+        append_row = [
+            str(data[0]),  # 时间
+            str(data[1]),  # 交易价格
+            str(data[2]),  # 交易行为
+            str(max_prob_class_idx),
+            str(max_prob)
+        ]
+
+        # 输出文件夹：trade_point_live_{strategy_name}_inference
+        trade_point_live_dir = os.path.join(
+            r"D:\github\RobotMeQ_Dataset\QuantData",
+            f"trade_point_live_inference_{strategy_name}"
+        )
+        os.makedirs(trade_point_live_dir, exist_ok=True)
+
+        # 文件名：A_000100_d.csv 这种
+        trade_point_file = os.path.join(
+            trade_point_live_dir,
+            f"{data[8]}_{data[3]}_{data[5]}.csv"
+        )
+
+        # 追加写入，不覆盖，不要列名
+        with open(trade_point_file, "a", newline="", encoding="utf-8-sig") as f:
+            writer = csv.writer(f)
+            writer.writerow(append_row)
+
         if df_prd_true['trues'].iloc[0] == df_prd_true['predictions'].iloc[0]:
             # 命中正确预测 → 保护
             position_keys_protected.add(position_key)
-
-            # 组装消息
-            max_prob = float(df_prd_prob.iloc[0, 0:4].max())
-            max_prob_class_idx = int(df_prd_prob.iloc[0, 0:4].values.argmax()) + 1
 
             post_msg = (data[4]
                         + "-"
@@ -449,35 +480,6 @@ def run_live_get_pred(strategy_name):
         # 统计要删除的训练集文件
         pred_live_symbols_to_delete.add(symbol)
 
-    # 备份每日预测结果
-    backup_dir = r"D:\github\RobotMeQ_Dataset\QuantData\live_to_ts_pred_backup"
-    os.makedirs(backup_dir, exist_ok=True)
-
-    backup_columns = [
-        "trade_time",  # 交易时间
-        "price",  # 价格
-        "signal",  # 信号
-        "symbol",  # 标的代码
-        "symbol_name",  # 标的名称
-        "timeframe",  # 时间级别
-        "asset_type",  # 资产类型
-        "intraday",  # 日内交易
-        "market_type"  # 市场类型
-    ]
-
-    backup_df = pd.DataFrame(
-        backup_rows,
-        columns=backup_columns
-    )
-
-    backup_path = os.path.join(
-        backup_dir,
-        f"{strategy_name}_backup_{pd.Timestamp.now():%Y%m%d_%H%M%S}.csv"
-    )
-
-    backup_df.to_csv(backup_path, index=False, encoding="utf-8-sig")
-    print(f"备份文件已保存至: {backup_path}")
-
     print("所有交易点验证完成，开始发送消息")
     # 发消息
     if len(temp_result_dict) == 0:
@@ -494,15 +496,6 @@ def run_live_get_pred(strategy_name):
     else:
         print('消息发送失败')
 
-    # 循环结束后，删除 local_live_dir 中符合条件的 CSV
-    # for f in os.listdir(local_live_dir):
-    #     if f.endswith(".csv") and f.startswith(strategy_name):
-    #         file_path = os.path.join(local_live_dir, f)
-    #         try:
-    #             os.remove(file_path)
-    #             # print(f"已删除: {file_path}")
-    #         except Exception as e:
-    #             print(f"删除失败 {file_path}: {e}")
     for f in csv_files_to_delete:
         file_path = os.path.join(local_live_dir, f)
         try:

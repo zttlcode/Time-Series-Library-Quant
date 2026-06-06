@@ -38,7 +38,7 @@ if __name__ == '__main__':
                             "D:\\github\\RobotMeQ_Dataset\\QuantData\\position_historyOrders\\")
 
     # 每日策略运行结束，模型预测
-    run_live.run_nature_prepare_dataset(strategy_name)  # 把实盘交易点转为测试集数据，然后运行Time-Series-Library-Quant的inference_live推理
+    # run_live.run_nature_prepare_dataset(strategy_name)  # 把实盘交易点转为测试集数据，然后运行Time-Series-Library-Quant的inference_live推理
     # run_live.run_nature_prepare_dataset_ssh(strategy_name)  # 执行远程服务器上的实盘csv转ts
-    # run_live.run_live_get_pred(strategy_name)  # 推理完成后，把分类相同的整理出来发消息，并清空文件
+    run_live.run_live_get_pred(strategy_name)  # 推理完成后，把分类相同的整理出来发消息，并清空文件
 
