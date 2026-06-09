@@ -12,7 +12,7 @@ def read_config(section, item):
     if 'windows' in sys_platform:
         path = "D:\\github\\Time-Series-Library-Quant\\Configs\\config.ini"
     else:
-        path = "/home/Time-Series-Library-Quant/Configs/config_prd.ini"
+        path = "/home/z/data/github/Time-Series-Library-Quant/Configs/config_prd.ini"
     cp.read(path, encoding='utf-8')
     return cp.get(section, item)
 
@@ -24,7 +24,7 @@ def write_config(section, item, value):
     if 'windows' in sys_platform:
         path = "D:\\github\\Time-Series-Library-Quant\\Configs\\config.ini"
     else:
-        path = "/home/Time-Series-Library-Quant/Configs/config_prd.ini"
+        path = "/home/z/data/github/Time-Series-Library-Quant/Configs/config_prd.ini"
     cp.read(path, encoding='utf-8')
     cp.set(section, item, value)
     with open(path, "w") as configfile:
