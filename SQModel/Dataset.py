@@ -198,10 +198,7 @@ def single_time_level_point_to_ts(assetList, temp_data_dict, temp_label_list, ti
                                   strategy_name, label_name, feature_plan_name,
                                   classification, classification_direction):
     # 加载数据
-    if strategy_name == 'identify_Market_Types':
-        item = 'market_condition_backtest'
-    else:
-        item = 'trade_point_backtest_' + strategy_name
+    item = 'trade_point_backtest_' + strategy_name
     labeled_filePath = (SQTools.read_config("SQData", item)
                         + assetList[0].assetsMarket
                         + "_"
@@ -544,8 +541,7 @@ def get_point_to_ts(time_point_step, handle_uneven_samples, strategy_name,
                     feature_plan_name, p2t_name, label_name, temp_data_dict, temp_label_list, assetList,
                     classification, classification_direction):
     if (strategy_name == 'tea_radical_nature'
-            or strategy_name == 'fuzzy_ma'
-            or strategy_name == 'identify_Market_Types'):
+            or strategy_name == 'fuzzy_ma'):
         if p2t_name == "point_to_ts_single":  # 单级别
             res = single_time_level_point_to_ts(assetList, temp_data_dict, temp_label_list, time_point_step,
                                                 handle_uneven_samples,
@@ -697,10 +693,7 @@ def prepare_dataset(flag, name, time_point_step, limit_length, handle_uneven_sam
     if classification == 4:
         problem_name_str = ("_" + name + "_" + str(strategy_name) + "_" + str(temp_file_feature_name) + "_" +
                             str(handle_uneven_samples) + "U" + str(label_name) + "_" + str(time_point_step) + "S")
-        if strategy_name == "identify_Market_Types":
-            class_value_list_str = ["1", "2", "3"]
-        else:
-            class_value_list_str = ["1", "2", "3", "4"]
+        class_value_list_str = ["1", "2", "3", "4"]
     elif classification == 2:
         problem_name_str = ("_" + name + "_" + str(strategy_name) + "_" + str(temp_file_feature_name) + "_" +
                             str(handle_uneven_samples) + "U" + str(label_name) + "_" + str(time_point_step) +
@@ -710,9 +703,10 @@ def prepare_dataset(flag, name, time_point_step, limit_length, handle_uneven_sam
         else:
             class_value_list_str = ["3", "4"]
     # 写入 ts 文件
+    prediction_live_path = SQTools.read_config("SQData", "trade_point_backTest_ts")
     write_dataframe_to_tsfile(
         data=result_df,
-        path="D:/github/RobotMeQ_Dataset/QuantData/trade_point_backTest_ts",  # 保存文件的路径
+        path=prediction_live_path,  # 保存文件的路径
         problem_name=problem_name_str,  # 问题名称
         class_label=class_value_list_str,  # 是否有 class_label
         class_value_list=result_series,  # 是否有 class_label
@@ -722,7 +716,7 @@ def prepare_dataset(flag, name, time_point_step, limit_length, handle_uneven_sam
 
 
 def prepare_dataset_single(flag, name, time_point_step, limit_length, handle_uneven_samples, strategy_name,
-                           feature_plan_name, p2t_name, label_name, count, pred_market_type, up_time_level):
+                           feature_plan_name, p2t_name, label_name, count, up_time_level):
     asset_code_path = SQTools.read_config("SQT", "asset_code")
     allStockCode = pd.read_csv(asset_code_path + "a800_stocks.csv", dtype={'code': str})
     df_dataset = allStockCode.iloc[500:]
@@ -744,16 +738,13 @@ def prepare_dataset_single(flag, name, time_point_step, limit_length, handle_une
         # 将列表转换成 Series
         result_series = pd.Series(temp_label_list)
 
-        problem_name_str = ("pred_" + str(pred_market_type) + "_" + name + "_"
+        problem_name_str = ("pred_" + name + "_"
                             + assetList[0].assetsMarket + "_"
                             + assetList[0].assetsCode + "_" + assetList[0].barEntity.timeLevel
                             + "_" + str(strategy_name) + "_" + str(feature_plan_name) + "_"
                             + str(handle_uneven_samples) + "_uneven" + str(label_name) + "_"
                             + str(time_point_step) + "step")
-        if strategy_name == "identify_Market_Types":
-            class_value_list_str = ["1", "2", "3"]
-        else:
-            class_value_list_str = ["1", "2", "3", "4"]
+        class_value_list_str = ["1", "2", "3", "4"]
 
         # 20250228增加逻辑：如果是为策略交易点判断当时的行情类型，则改为行情分类
         # 注意，不能在get_point_to_ts中挑出1、3类，因为预测结果是list，没有时间，跟原始label文件对不上
@@ -768,11 +759,12 @@ def prepare_dataset_single(flag, name, time_point_step, limit_length, handle_une
         #         temp_label_list = ["1", "2", "3"] + ["3"] * (len(temp_label_list) - 3)
         #         # 预测行情，不计算准确率，所以原来的买卖分类无所谓，随便填
         #         result_series = pd.Series(temp_label_list)
+        path = SQTools.read_config("SQData", "trade_point_backTest_ts")
 
         # 写入 ts 文件
         write_dataframe_to_tsfile(
             data=result_df,
-            path="D:/github/RobotMeQ_Dataset/QuantData/trade_point_backTest_ts/prediction",  # 保存文件的路径
+            path=path+"prediction",  # 保存文件的路径
             problem_name=problem_name_str,  # 问题名称
             class_label=class_value_list_str,  # 是否有 class_label
             class_value_list=result_series,  # 是否有 class_label
@@ -782,7 +774,7 @@ def prepare_dataset_single(flag, name, time_point_step, limit_length, handle_une
         # 写入 ts 文件
         write_dataframe_to_tsfile(
             data=result_df,
-            path="D:/github/RobotMeQ_Dataset/QuantData/trade_point_backTest_ts/prediction",  # 保存文件的路径
+            path=path+"prediction",  # 保存文件的路径
             problem_name=problem_name_str,  # 问题名称
             class_label=class_value_list_str,  # 是否有 class_label
             class_value_list=result_series,  # 是否有 class_label
@@ -807,7 +799,6 @@ def prepare_train_dataset():
         limit_length：限制长度是为了方便debug时调试，数据太多加载太慢
         handle_uneven_samples: macd策略样本不均，其他策略不一定有这个问题，所以这里控制要不要处理
         strategy_name: 为了读回测点文件，     
-                        identify_Market_Types  不需要处理样本不均
                         fuzzy_ma
                         tea_radical_nature
         feature_plan_name: 不同特征组织方案
@@ -850,5 +841,4 @@ def prepare_pred_dataset():
     prepare_dataset_single("_TEST", "A_15", 160,
                            20000, True,
                            "fuzzy_nature", "feature_all",
-                           "point_to_ts_single", "_label1", None,
-                           False, 'd')
+                           "point_to_ts_single", "_label1", None, 'd')

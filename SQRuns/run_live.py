@@ -158,7 +158,8 @@ def assemble_ts_data(strategy_name, data, df, assetList):
     else:
         return None
 
-    save_path = r"D:/github/RobotMeQ_Dataset/QuantData/trade_point_backTest_ts/prediction_live_" + strategy_name
+    prediction_live_path = SQTools.read_config("SQData", "trade_point_backTest_ts")
+    save_path = prediction_live_path + "prediction_live_" + strategy_name
 
     write_dataframe_to_tsfile(
         data=result_df,
@@ -183,7 +184,7 @@ def assemble_ts_data(strategy_name, data, df, assetList):
 
 def run_nature_prepare_dataset(strategy_name):
     # ===== 本地 CSV 目录 =====
-    local_live_dir = r"D:\github\RobotMeQ_Dataset\QuantData\live_to_ts"
+    local_live_dir = SQTools.read_config("SQData", "live_to_ts")
 
     # 获取目录下所有 csv 文件
     csv_files = [f for f in os.listdir(local_live_dir) if f.endswith(".csv") and f.startswith(strategy_name)]
@@ -356,7 +357,7 @@ def run_nature_prepare_dataset_ssh(strategy_name):
 
 def run_live_get_pred(strategy_name):
     # ===== 本地 CSV 目录 =====
-    local_live_dir = r"D:\github\RobotMeQ_Dataset\QuantData\live_to_ts"
+    local_live_dir = SQTools.read_config("SQData", "live_to_ts")
 
     # 获取目录下所有 csv 文件
     csv_files = [f for f in os.listdir(local_live_dir) if f.endswith(".csv") and f.startswith(strategy_name)]
@@ -435,9 +436,11 @@ def run_live_get_pred(strategy_name):
             str(max_prob)
         ]
 
+        trade_point_live_dir_path = SQTools.read_config("SQT", "quantdata_path")
+
         # 输出文件夹：trade_point_live_{strategy_name}_inference
         trade_point_live_dir = os.path.join(
-            r"D:\github\RobotMeQ_Dataset\QuantData",
+            trade_point_live_dir_path,
             f"trade_point_live_inference_{strategy_name}"
         )
         os.makedirs(trade_point_live_dir, exist_ok=True)
@@ -512,9 +515,10 @@ def run_live_get_pred(strategy_name):
             except Exception as e:
                 print(f"删除失败 {file_path}: {e}")
 
+    position_dir_path = SQTools.read_config("SQT", "quantdata_path")
     # 删除实盘仓位中未匹配的交易点，只保留分类正确的交易点
     final_position_keys_to_delete = position_keys_to_delete - position_keys_protected
-    position_dir = r"D:\github\RobotMeQ_Dataset\QuantData\position_currentOrders_" + strategy_name
+    position_dir = position_dir_path + "position_currentOrders_" + strategy_name
 
     for key in final_position_keys_to_delete:
         file_path = os.path.join(position_dir, f"position_{key}.json")
@@ -526,9 +530,9 @@ def run_live_get_pred(strategy_name):
             except Exception as e:
                 print(f"删除失败 {file_path}: {e}")
 
+    pred_live_root_dir_path = SQTools.read_config("SQData", "trade_point_backTest_ts")
     pred_live_root_dir = (
-        r"D:\github\RobotMeQ_Dataset\QuantData\trade_point_backTest_ts"
-        r"\prediction_live_" + strategy_name
+        pred_live_root_dir_path + "prediction_live_" + strategy_name
     )
 
     # 删除训练集文件

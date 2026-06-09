@@ -10,7 +10,7 @@ from utils.print_args import print_args
 import random
 import numpy as np
 import pandas as pd
-
+import SQTool.Tools as SQTool
 
 def run_train(train_set_filepath, model_id, model_name, feature_plan_name):
     fix_seed = 2021
@@ -28,10 +28,11 @@ def run_train(train_set_filepath, model_id, model_name, feature_plan_name):
     parser.add_argument('--model', type=str, default=model_name,
                         help='model name, options: [Autoformer, Transformer, TimesNet]')
 
+    prediction_live_path = SQTool.read_config("SQData", "trade_point_backTest_ts")
     # data loader
     parser.add_argument('--data', type=str, default='UEA', help='dataset type')
     parser.add_argument('--root_path', type=str,
-                        default='D:/github/RobotMeQ_Dataset/QuantData/trade_point_backTest_ts/' + train_set_filepath + '/',
+                        default=prediction_live_path + train_set_filepath + '/',
                         help='root path of the data file')
     parser.add_argument('--data_path', type=str, default='exchange_rate_pred24.csv', help='data file')
     parser.add_argument('--features', type=str, default='MS',
@@ -231,7 +232,7 @@ def run_train(train_set_filepath, model_id, model_name, feature_plan_name):
         torch.cuda.empty_cache()
 
 
-def run_predict(pred_set_filepath, model_id, model_name, time_point_step, asset_code, pred_market, strategy_name, pred_live=False):
+def run_predict(pred_set_filepath, model_id, model_name, time_point_step, asset_code, strategy_name, pred_live=False):
     fix_seed = 2021
     random.seed(fix_seed)
     torch.manual_seed(fix_seed)
@@ -248,14 +249,15 @@ def run_predict(pred_set_filepath, model_id, model_name, time_point_step, asset_
                         help='model name, options: [Autoformer, Transformer, TimesNet]')  # ClassCNN  ClassLSTM  Informer
 
     # data loader
+    prediction_live_path = SQTool.read_config("SQData", "trade_point_backTest_ts")
     parser.add_argument('--data', type=str, default='UEA', help='dataset type')
     if strategy_name is None:
         parser.add_argument('--root_path', type=str,
-                            default='D:/github/RobotMeQ_Dataset/QuantData/trade_point_backTest_ts/prediction/' + pred_set_filepath + '/',
+                            default= prediction_live_path + 'prediction/' + pred_set_filepath + '/',
                             help='root path of the data file')
     else:
         parser.add_argument('--root_path', type=str,
-                            default='D:/github/RobotMeQ_Dataset/QuantData/trade_point_backTest_ts/prediction_live_' +
+                            default=prediction_live_path + 'prediction_live_' +
                                     strategy_name + '/' + pred_set_filepath + '/',
                             help='root path of the data file')
     parser.add_argument('--data_path', type=str, default='exchange_rate_pred24.csv', help='data file')
@@ -449,7 +451,7 @@ def run_predict(pred_set_filepath, model_id, model_name, time_point_step, asset_
 
         exp = Exp(args)  # set experiments
         print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
-        exp.test(setting, test=1, asset_code=asset_code, pred_market=pred_market, pred_live=True)
+        exp.test(setting, test=1, asset_code=asset_code, pred_live=True)
         torch.cuda.empty_cache()
 
 
@@ -489,8 +491,7 @@ def inference(name,
               model_id,
               model_name,
               classification,
-              classification_direction,
-              pred_market_type):
+              classification_direction):
     """
     预测交易点/行情
     RMQDataset.prepare_dataset_single("_TEST", "A_30", 20,
@@ -504,7 +505,8 @@ def inference(name,
     """
     # " + str(strategy_name) + "
     # kdj,boll
-    allStockCode = pd.read_csv("D:/github/RobotMeQ/QuantData/asset_code/a800_stocks.csv", dtype={'code': str})
+    path = SQTool.read_config("SQT", "asset_code")
+    allStockCode = pd.read_csv(path+"a800_stocks.csv", dtype={'code': str})
     df_dataset = allStockCode.iloc[500:]
     n = 1
     if strategy_name == "c4_oscillation_boll_nature":
@@ -513,14 +515,14 @@ def inference(name,
         strategy_name = "kdj"
     for index, row in df_dataset.iterrows():
         asset_code = row['code'][3:]
-        problem_name_str = ("pred_" + str(pred_market_type) + "_" + name + "_"
+        problem_name_str = ("pred_" + name + "_"
                             + name[0:1] + "_"
                             + asset_code + "_" + name[2:]
                             + "_" + str(strategy_name) + "_" + str(feature_plan_name) + "_"
                             + str(handle_uneven_samples) + "_uneven" + str(label_name) + "_"
                             + str(time_point_step) + "step")
         try:
-            run_predict(problem_name_str, model_id, model_name, time_point_step, asset_code, pred_market_type, None)
+            run_predict(problem_name_str, model_id, model_name, time_point_step, asset_code, None)
         except Exception as e:
             print(e)
             continue
@@ -538,7 +540,7 @@ def inference_live(name,
                    classification,
                    classification_direction):
     # ===== 本地 CSV 目录 =====
-    local_live_dir = r"D:\github\RobotMeQ_Dataset\QuantData\live_to_ts"
+    local_live_dir = SQTool.read_config("SQData", "live_to_ts")
 
     # 获取目录下所有 csv 文件
     csv_files = [f for f in os.listdir(local_live_dir) if f.endswith(".csv") and f.startswith(strategy_name)]
@@ -576,5 +578,5 @@ def inference_live(name,
                             + str(data[3]) + "_" + str(data[5])
                             + "_" + str(strategy_name) + "_" + str(feature_plan_name) + "_"
                             + str(time_point_step) + "_step")
-        run_predict(problem_name_str, model_id, model_name, time_point_step, str(data[3]), False, strategy_name, True)
+        run_predict(problem_name_str, model_id, model_name, time_point_step, str(data[3]), strategy_name, True)
 

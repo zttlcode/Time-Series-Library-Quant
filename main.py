@@ -113,8 +113,7 @@ if __name__ == '__main__':
     #                     model_id,
     #                     model_name,
     #                     classification,
-    #                     classification_direction,
-    #                     pred_market_type=False)  # 预测行情 True 是3分类预测行情  False 是4分类预测交易点
+    #                     classification_direction)  # 预测行情 True 是3分类预测行情  False 是4分类预测交易点
     # 实盘运行推理
     run_quant.inference_live(name,
                              time_point_step,

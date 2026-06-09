@@ -1,5 +1,6 @@
 import SQRuns.run_live as run_live
 import SQTool.Tools as SQTool
+from SQRuns import run_quant as run_quant
 
 
 if __name__ == '__main__':
@@ -19,6 +20,13 @@ if __name__ == '__main__':
     注意：
         为了给不同策略实盘分配不同文件夹，而我懒得再给仓位对象加入策略名属性，因此，
         运行策略时要把config.ini的position_currentOrders和position_historyOrders的值手动增加策略名后缀
+    
+    live_to_ts、live 组装数据集，ckpt文件推理，
+    inference_live产生数据
+    live_to_ts原始信号删除
+    inference_live推理结果删除
+    position_currentOrders_fuzzy_ma、position_currentOrders_tea_radical_nature刚买入的持仓信息删除
+    prediction_live_fuzzy_ma、prediction_live_tea_radical_nature实盘预测文件删除
     """
     strategy_name = "fuzzy_ma"
     if strategy_name == "fuzzy_ma":
