@@ -1,11 +1,12 @@
+import sys
+
+sys.path.append("/home/z/data/github/Time-Series-Library-Quant")
+
 import SQRuns.run_live as run_live
 import SQTool.Tools as SQTool
 from time import sleep
 from datetime import datetime, time, timedelta
 from SQRuns import run_quant as run_quant
-import sys
-
-sys.path.append("/home/z/data/github/Time-Series-Library-Quant")
 
 
 def run(strategy_name):
@@ -38,6 +39,7 @@ def run(strategy_name):
 
     # 每日策略运行结束，模型预测
     run_live.run_nature_prepare_dataset(strategy_name)  # 把实盘交易点转为测试集数据，然后运行Time-Series-Library-Quant的inference_live推理
+    print(strategy_name+'数据集准备完成')
     sleep(30)
     # 实盘运行推理
     run_quant.inference_live(name,
@@ -48,7 +50,8 @@ def run(strategy_name):
                              model_name,
                              classification,
                              classification_direction)
-
+    print(strategy_name+'推理完成')
+    sleep(10)
     run_live.run_live_get_pred(strategy_name)  # 推理完成后，把分类相同的整理出来发消息，并清空文件
 
 
@@ -59,8 +62,7 @@ def seconds_until(target_hour, target_minute):
         target += timedelta(days=1)
     return (target - now).seconds
 
-
-if __name__ == '__main__':
+def run_prd():
     while True:
         # 只能交易日的0~9:30之间，或交易日15~0之间，手动启
         workday_list = SQTool.read_config("SQT", "QuantData_path") + "workday_list.csv"
@@ -76,3 +78,13 @@ if __name__ == '__main__':
             sleep(seconds_until(7, 0))  # 睡到早上7点，再判断是不是交易日
         else:  # 不是交易日
             sleep(seconds_until(7, 0))  # 直接等24小时，再重新判断
+
+
+if __name__ == '__main__':
+    # run_prd()
+    print(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "运行任务")
+    run("fuzzy_ma")
+    print(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "完成 position、inference_live、trade_point_live_inference_fuzzy_ma")
+    sleep(30)
+    run("tea_radical_nature")
+    print(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "完成 position、inference_live、trade_point_live_inference_tea_radical_nature")
