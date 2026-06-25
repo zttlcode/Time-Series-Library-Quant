@@ -3,6 +3,8 @@ import SQTool.Tools as SQTool
 from SQRuns import run_quant as run_quant
 from time import sleep
 from datetime import datetime, time, timedelta
+from SQTool.log_utils import get_logger
+log = get_logger("TSLQ.Run_prd_win")
 
 
 def run(strategy_name):
@@ -37,8 +39,8 @@ def run(strategy_name):
     run_live.run_nature_prepare_dataset(strategy_name)  # 把实盘交易点转为测试集数据，然后运行Time-Series-Library-Quant的inference_live推理
     # run_live.run_nature_prepare_dataset_ssh(strategy_name)  # 执行远程服务器上的实盘csv转ts
 
-    print(strategy_name + '数据集准备完成')
-    sleep(30)
+    log.info(datetime.now().strftime("%Y-%m-%d") + strategy_name + '数据集准备完成')
+    sleep(10)
     # 实盘运行推理
     run_quant.inference_live(name,
                              time_point_step,
@@ -48,7 +50,7 @@ def run(strategy_name):
                              model_name,
                              classification,
                              classification_direction)
-    print(strategy_name + '推理完成')
+    log.info(datetime.now().strftime("%Y-%m-%d") + strategy_name + '推理完成')
     sleep(10)
     run_live.run_live_get_pred(strategy_name)  # 推理完成后，把分类相同的整理出来发消息，并清空文件
 
@@ -96,11 +98,13 @@ if __name__ == '__main__':
     prediction_live_fuzzy_ma、prediction_live_tea_radical_nature实盘预测文件删除
     """
     # run_prd()
-    print(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "运行任务")
+    log.info(datetime.now().strftime("%Y-%m-%d") + "运行fuzzy_ma")
     run("fuzzy_ma")
-    print(datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-          "完成 position、inference_live、trade_point_live_inference_fuzzy_ma")
-    sleep(30)
+    # 涉及 position、inference_live、trade_point_live_inference_fuzzy_ma
+    log.info(datetime.now().strftime("%Y-%m-%d") + "运行fuzzy_ma完成")
+    sleep(10)
+    log.info(datetime.now().strftime("%Y-%m-%d") + "运行tea_radical_nature")
     run("tea_radical_nature")
-    print(datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-          "完成 position、inference_live、trade_point_live_inference_tea_radical_nature")
+    # 涉及 position、inference_live、trade_point_live_inference_tea_radical_nature
+    log.info(datetime.now().strftime("%Y-%m-%d") + "运行tea_radical_nature完成")
+

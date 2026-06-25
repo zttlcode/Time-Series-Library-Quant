@@ -7,6 +7,7 @@ import os
 import paramiko
 import io
 import csv
+import json
 
 import glob
 from sktime.datasets import write_dataframe_to_tsfile
@@ -193,22 +194,22 @@ def run_nature_prepare_dataset(strategy_name):
     csv_files = [f for f in os.listdir(local_live_dir) if f.endswith(".csv") and f.startswith(strategy_name)]
 
     if not csv_files:
-        print("没有找到任何 CSV 文件")
+        log.warning(datetime.now().strftime("%Y-%m-%d") + strategy_name + '没有找到任何 CSV 文件')
         return
 
     for csv_file in csv_files:
         csv_path = os.path.join(local_live_dir, csv_file)
-        print(f"正在处理文件: {csv_path}")
+        log.info(datetime.now().strftime("%Y-%m-%d") + strategy_name + f"正在处理文件: {csv_path}")
 
         # ===== Step 1: 读取 CSV =====
         try:
             df = pd.read_csv(csv_path, header=None, dtype={3: str})
         except Exception as e:
-            print(f"无法读取 {csv_file}: {e}")
+            log.error(datetime.now().strftime("%Y-%m-%d") + strategy_name + f"无法读取 {csv_file}: {e}")
             continue
 
         if df.empty:
-            print(f"文件 {csv_file} 为空，跳过处理")
+            log.warning(datetime.now().strftime("%Y-%m-%d") + strategy_name + f"文件 {csv_file} 为空，跳过处理")
             continue
 
         # ===== Step 2: 读取第一行用于元信息 =====
@@ -245,7 +246,7 @@ def run_nature_prepare_dataset(strategy_name):
             # )
             csv_path = assetList[-1].barEntity.live_bar
             if not os.path.exists(csv_path):
-                print(f"文件不存在，跳过 {assetList[-1].assetsCode}: {csv_path}")
+                log.warning(datetime.now().strftime("%Y-%m-%d") + strategy_name + f"文件不存在，跳过 {assetList[-1].assetsCode}: {csv_path}")
                 continue
             # 读取 CSV（有表头）
             data_0 = pd.read_csv(csv_path)
@@ -254,7 +255,7 @@ def run_nature_prepare_dataset(strategy_name):
             # 统一裁剪数据
             data_0 = data_0.reset_index(drop=True)
         except Exception as e:
-            print(f"无法解析行情数据 {csv_file}: {e}")
+            log.error(datetime.now().strftime("%Y-%m-%d") + strategy_name + f"无法解析行情数据 {csv_file}: {e}")
             continue
         # 转化ts文件
         assemble_ts_data(strategy_name, data, data_0, assetList)
@@ -356,6 +357,66 @@ def run_nature_prepare_dataset_ssh(strategy_name):
     print("所有服务器 `/tmp` 目录中的备份 CSV 文件已清空")
     # **关闭 SSH 连接**
     client.close()
+
+
+def _undo_sell(symbol, timeframe, strategy_name):
+    """撤销最近一次卖出：从 history 搬回 current，恢复持仓状态。
+
+    返回值:
+        True   — 恢复成功
+        False  — 恢复失败（history 文件不存在或为空）
+    """
+    quantdata_path = SQTools.read_config("SQT", "quantdata_path")
+
+    hist_file = os.path.join(
+        quantdata_path, f"position_historyOrders_{strategy_name}",
+        f"position_{symbol}_{timeframe}.json"
+    )
+    cur_file = os.path.join(
+        quantdata_path, f"position_currentOrders_{strategy_name}",
+        f"position_{symbol}_{timeframe}.json"
+    )
+
+    if not os.path.exists(hist_file):
+        log.warning(f"  [撤销卖出] {symbol} → 失败：history 文件不存在")
+        return False
+
+    try:
+        with open(hist_file, 'r', encoding='utf-8') as f:
+            history = json.load(f)
+    except Exception as e:
+        log.warning(f"  [撤销卖出] {symbol} → 失败：读取 history 出错 ({e})")
+        return False
+
+    if not history:
+        log.warning(f"  [撤销卖出] {symbol} → 失败：history 为空")
+        return False
+
+    # 最近一次卖出的 key 是最大时间戳
+    last_key = max(history.keys())
+    order = history.pop(last_key)
+
+    # 去掉 sell() 添加的字段，恢复为纯买入状态
+    order.pop('closePrice', None)
+    order.pop('closeDateTime', None)
+    order.pop('pnl', None)
+
+    entry_price = order.get('openPrice', '?')
+
+    # 写回 currentOrders
+    os.makedirs(os.path.dirname(cur_file), exist_ok=True)
+    with open(cur_file, 'w', encoding='utf-8') as f:
+        json.dump({last_key: order}, f, ensure_ascii=False)
+
+    # 更新 history（去掉已恢复的条目）
+    with open(hist_file, 'w', encoding='utf-8') as f:
+        json.dump(history, f, ensure_ascii=False)
+
+    log.info(
+        f"  [撤销卖出] {symbol} ✓ 仓位已恢复 "
+        f"(入场价={entry_price}, 入场时间={order.get('openDateTime', '?')})"
+    )
+    return True
 
 
 def run_live_get_pred(strategy_name):
@@ -473,12 +534,33 @@ def run_live_get_pred(strategy_name):
         #       TSLQ 无法恢复仓位，os.remove() 只会破坏排查线索
         # ================================================================
         if signal_type == "sell":
-            log.info(
-                f"  [{symbol}] 卖出信号 → 跳过仓位文件操作 "
-                f"(预测={pred_val}, 最高概率类={max_prob_class_idx})"
-            )
+            if trues_val == pred_val:
+                # 有效卖出 → RobotMeQ 已清仓并写好 history，只发通知
+                log.info(
+                    f"  [{symbol}] 卖出信号 ✓ 有效 → 仓位已由策略正常清空 "
+                    f"(预测={pred_val}, 概率={max_prob:.4f})"
+                )
+                post_msg = (data[4] + "-" + symbol + "-" + str(timeframe)
+                            + "：卖出 ✓有效"
+                            + " 价格=" + str(data[1])
+                            + " 时间=" + data[0]
+                            + " 概率=" + f"{max_prob:.4f}"
+                            + "（类" + str(max_prob_class_idx) + "）")
+                if symbol not in temp_result_dict:
+                    temp_result_dict[symbol] = []
+                temp_result_dict[symbol].append(post_msg)
+            else:
+                # 无效卖出 → 模型认为不该卖，撤销卖出，恢复仓位！
+                log.warning(
+                    f"  [{symbol}] 卖出信号 ✗ 无效 → 撤销卖出，恢复仓位 "
+                    f"(真实={trues_val}, 预测={pred_val}, 概率={max_prob:.4f})"
+                )
+                if _undo_sell(symbol, timeframe, strategy_name):
+                    log.info(f"  [{symbol}] 仓位恢复成功，策略下次运行将视为持仓中")
+                else:
+                    log.error(f"  [{symbol}] 仓位恢复失败！请手动检查")
             pred_live_symbols_to_delete.add(symbol)
-            continue  # ← 跳过后续的 position_key 跟踪和删除逻辑
+            continue
 
         # ===== 以下仅处理买入信号 =====
         position_key = f"{symbol}_{timeframe}"
