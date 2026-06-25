@@ -24,6 +24,9 @@ from SQTool import Message
 from SQModel import Dataset as SQDataset
 from SQTool import Tools as SQTools
 
+from SQTool.log_utils import get_logger
+log = get_logger("TSLQ.run_live")
+
 
 def assemble_ts_data(strategy_name, data, df, assetList):
     # 计算所有指标
@@ -356,6 +359,7 @@ def run_nature_prepare_dataset_ssh(strategy_name):
 
 
 def run_live_get_pred(strategy_name):
+    log.info(f"========== run_live_get_pred({strategy_name}) 开始 ==========")
     # ===== 本地 CSV 目录 =====
     local_live_dir = SQTools.read_config("SQData", "live_to_ts")
 
@@ -363,13 +367,15 @@ def run_live_get_pred(strategy_name):
     csv_files = [f for f in os.listdir(local_live_dir) if f.endswith(".csv") and f.startswith(strategy_name)]
 
     if not csv_files:
-        print("没有找到任何 CSV 文件")
+        log.info("没有找到任何 CSV 文件")
         return
+
+    log.info(f"找到 {len(csv_files)} 个待处理的信号文件")
 
     backup_rows = []  # 用来备份实盘的所有策略交易点
     temp_result_dict = {}  # 用来整理值得发消息的交易点
     prd_result_files_to_delete = set()  # 在 for 循环前记录要删除的预测结果文件
-    position_keys_to_delete = set()     # 候选删除
+    position_keys_to_delete = set()     # 候选删除（仅买入信号）
     position_keys_protected = set()  # 命中过正确预测 → 永久保护
     pred_live_symbols_to_delete = set()  # 清理组装好的测试集文件
     csv_files_to_delete = set()  # 用来保留live_to_ts中还没预测的csv
@@ -382,11 +388,11 @@ def run_live_get_pred(strategy_name):
         try:
             df = pd.read_csv(csv_path, header=None, dtype={3: str})
         except Exception as e:
-            print(f"无法读取 {csv_file}: {e}")
+            log.error(f"无法读取 {csv_file}: {e}")
             continue
 
         if df.empty:
-            print(f"文件 {csv_file} 为空，跳过处理")
+            log.warning(f"文件 {csv_file} 为空，跳过处理")
             continue
 
         # ===== Step 2: 读取第一行用于元信息 =====
@@ -395,17 +401,23 @@ def run_live_get_pred(strategy_name):
         if len(data) >= 9:
             backup_rows.append(data[:9])
         else:
-            print(f"{csv_file} 的 data 长度不足 9，跳过备份")
+            log.warning(f"{csv_file} 的 data 长度不足 9，跳过备份")
+
+        signal_type = str(data[2]).strip().lower()  # "buy" or "sell"
+        symbol = data[3]  # 股票代码
+        timeframe = data[5]  # 时间级别
+
+        log.info(f"处理信号: {symbol} {timeframe} {signal_type} 价格={data[1]} 时间={data[0]}")
 
         prob_df_path = SQTools.read_config("SQData", "inference_live")
-        df_prd_true_filePath = prob_df_path + data[3] + "_prd_result.csv"
-        df_prd_prob_filePath = prob_df_path + data[3] + "_prd_prob.csv"
+        df_prd_true_filePath = prob_df_path + symbol + "_prd_result.csv"
+        df_prd_prob_filePath = prob_df_path + symbol + "_prd_prob.csv"
         if not os.path.exists(df_prd_true_filePath):
-            print(data[3] + "预测结果文件不存在")
+            log.warning(f"{symbol} 预测结果文件不存在: {df_prd_true_filePath}")
             continue
 
         if not os.path.exists(df_prd_prob_filePath):
-            print(data[3] + "预测概率文件不存在")
+            log.warning(f"{symbol} 预测概率文件不存在: {df_prd_prob_filePath}")
             continue
 
         # 只有预测文件存在，才认为这个 CSV 被成功消费
@@ -416,10 +428,9 @@ def run_live_get_pred(strategy_name):
         # 在 for 循环中，确认文件存在后，记录文件路径
         prd_result_files_to_delete.add(df_prd_true_filePath)
         prd_result_files_to_delete.add(df_prd_prob_filePath)
-        # 从仓位管理中删除未达标的仓位
-        symbol = data[3]  # 如 sh510300
-        timeframe = data[5]  # 如 d
-        position_key = f"{symbol}_{timeframe}"
+
+        trues_val = str(df_prd_true['trues'].iloc[0])
+        pred_val = str(df_prd_true['predictions'].iloc[0])
 
         # ===== 先把当前交易点写入实盘推理结果文件（无论预测对错都写）=====
         # 最大概率类别（1~4）
@@ -448,7 +459,7 @@ def run_live_get_pred(strategy_name):
         # 文件名：A_000100_d.csv 这种
         trade_point_file = os.path.join(
             trade_point_live_dir,
-            f"{data[8]}_{data[3]}_{data[5]}.csv"
+            f"{data[8]}_{symbol}_{timeframe}.csv"
         )
 
         # 追加写入，不覆盖，不要列名
@@ -456,16 +467,35 @@ def run_live_get_pred(strategy_name):
             writer = csv.writer(f)
             writer.writerow(append_row)
 
-        if df_prd_true['trues'].iloc[0] == df_prd_true['predictions'].iloc[0]:
+        # ================================================================
+        # 关键修复：卖出信号不参与仓位文件的增删
+        # 原因：RobotMeQ 的 sell() 已经清空了仓位文件，
+        #       TSLQ 无法恢复仓位，os.remove() 只会破坏排查线索
+        # ================================================================
+        if signal_type == "sell":
+            log.info(
+                f"  [{symbol}] 卖出信号 → 跳过仓位文件操作 "
+                f"(预测={pred_val}, 最高概率类={max_prob_class_idx})"
+            )
+            pred_live_symbols_to_delete.add(symbol)
+            continue  # ← 跳过后续的 position_key 跟踪和删除逻辑
+
+        # ===== 以下仅处理买入信号 =====
+        position_key = f"{symbol}_{timeframe}"
+        log.info(f"  [{symbol}] 买入信号 → 真实={trues_val}, 预测={pred_val}, "
+                 f"最高概率类={max_prob_class_idx}, 概率={max_prob:.4f}")
+
+        if trues_val == pred_val:
             # 命中正确预测 → 保护
             position_keys_protected.add(position_key)
+            log.info(f"  [{symbol}] ✓ 预测正确 → 仓位文件受保护")
 
             post_msg = (data[4]
                         + "-"
-                        + data[3]
+                        + symbol
                         + "-"
-                        + str(data[5])
-                        + "：" + data[2] + "："
+                        + str(timeframe)
+                        + "：" + signal_type + "："
                         + str(data[1])
                         + " 时间："
                         + data[0]
@@ -474,16 +504,23 @@ def run_live_get_pred(strategy_name):
                         + "（类"
                         + str(max_prob_class_idx)
                         + "）")
-            if data[3] not in temp_result_dict:
-                temp_result_dict[data[3]] = []
-            temp_result_dict[data[3]].append(post_msg)
+            if symbol not in temp_result_dict:
+                temp_result_dict[symbol] = []
+            temp_result_dict[symbol].append(post_msg)
         else:
-            # 仅当未被保护时，才加入删除候选
+            # 预测不正确 → 加入删除候选（撤销错误买入）
             position_keys_to_delete.add(position_key)
+            log.warning(
+                f"  [{symbol}] ✗ 预测不匹配 → 仓位文件将删除 "
+                f"(真实={trues_val}, 预测={pred_val})"
+            )
         # 统计要删除的训练集文件
         pred_live_symbols_to_delete.add(symbol)
 
-    print("所有交易点验证完成，开始发送消息")
+    # ===== 批量清理 =====
+    log.info(f"信号验证完成: 保护={len(position_keys_protected)}, "
+             f"待删除={len(position_keys_to_delete)}")
+
     # 发消息
     if len(temp_result_dict) == 0:
         content_str = "都不符合"
@@ -495,53 +532,52 @@ def run_live_get_pred(strategy_name):
     mail_list_qq = "mail_list_qq_d"
     res = Message.QQmail(mail_msg, mail_list_qq)
     if res:
-        print('消息发送成功')
+        log.info("消息发送成功")
     else:
-        print('消息发送失败')
+        log.error("消息发送失败")
 
+    # 1、删除已消费的 live_to_ts CSV
     for f in csv_files_to_delete:
         file_path = os.path.join(local_live_dir, f)
         try:
             os.remove(file_path)
+            log.info(f"已删除信号文件: {f}")
         except Exception as e:
-            print(f"删除失败 {file_path}: {e}")
+            log.error(f"删除失败 {file_path}: {e}")
 
-    # 删除本次实际使用过的预测结果文件
+    # 2、删除本次实际使用过的预测结果文件
     for file_path in prd_result_files_to_delete:
         if os.path.exists(file_path):
             try:
                 os.remove(file_path)
-                # print(f"已删除预测结果文件: {file_path}")
             except Exception as e:
-                print(f"删除失败 {file_path}: {e}")
+                log.error(f"删除失败 {file_path}: {e}")
 
+    # 3、删除实盘仓位中未匹配的买入交易点（仅买入信号）
     position_dir_path = SQTools.read_config("SQT", "quantdata_path")
-    # 删除实盘仓位中未匹配的交易点，只保留分类正确的交易点
     final_position_keys_to_delete = position_keys_to_delete - position_keys_protected
     position_dir = position_dir_path + "position_currentOrders_" + strategy_name
-
     for key in final_position_keys_to_delete:
         file_path = os.path.join(position_dir, f"position_{key}.json")
 
         if os.path.exists(file_path):
             try:
                 os.remove(file_path)
-                # print(f"已删除持仓文件: {file_path}")
+                log.warning(f"已删除仓位文件(模型拒绝): {file_path}")
             except Exception as e:
-                print(f"删除失败 {file_path}: {e}")
+                log.error(f"删除失败 {file_path}: {e}")
+        else:
+            log.info(f"仓位文件不存在，无需删除: {file_path}")
 
+    # 4、删除训练集文件
     pred_live_root_dir_path = SQTools.read_config("SQData", "trade_point_backTest_ts")
     pred_live_root_dir = (
         pred_live_root_dir_path + "prediction_live_" + strategy_name
     )
-
-    # 删除训练集文件
     for folder_name in os.listdir(pred_live_root_dir):
         folder_path = os.path.join(pred_live_root_dir, folder_name)
-
         if not os.path.isdir(folder_path):
             continue
-
         for symbol in pred_live_symbols_to_delete:
             # 使用 _symbol_ 作为边界，防止误匹配
             if f"_{symbol}_" in folder_name:

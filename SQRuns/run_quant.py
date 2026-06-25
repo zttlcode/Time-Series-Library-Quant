@@ -1,10 +1,6 @@
 import argparse
 import os
 import torch
-from exp.exp_long_term_forecasting import Exp_Long_Term_Forecast
-from exp.exp_imputation import Exp_Imputation
-from exp.exp_short_term_forecasting import Exp_Short_Term_Forecast
-from exp.exp_anomaly_detection import Exp_Anomaly_Detection
 from exp.exp_classification import Exp_Classification
 from utils.print_args import print_args
 import random
@@ -158,18 +154,7 @@ def run_train(train_set_filepath, model_id, model_name, feature_plan_name):
     print('Args in experiment:')
     print_args(args)
 
-    if args.task_name == 'long_term_forecast':
-        Exp = Exp_Long_Term_Forecast
-    elif args.task_name == 'short_term_forecast':
-        Exp = Exp_Short_Term_Forecast
-    elif args.task_name == 'imputation':
-        Exp = Exp_Imputation
-    elif args.task_name == 'anomaly_detection':
-        Exp = Exp_Anomaly_Detection
-    elif args.task_name == 'classification':
-        Exp = Exp_Classification
-    else:
-        Exp = Exp_Long_Term_Forecast
+    Exp = Exp_Classification
 
     if args.is_training:
         for ii in range(args.itr):
@@ -266,7 +251,7 @@ def run_predict(pred_set_filepath, model_id, model_name, time_point_step, asset_
     parser.add_argument('--target', type=str, default='OT', help='target feature in S or MS task')
     parser.add_argument('--freq', type=str, default='d',
                         help='freq for time features encoding, options:[s:secondly, t:minutely, h:hourly, d:daily, b:business days, w:weekly, m:monthly], you can also use more detailed freq like 15min or 3h')
-    parser.add_argument('--checkpoints', type=str, default='./checkpoints/', help='location of model checkpoints')
+    parser.add_argument('--checkpoints', type=str, default='../checkpoints/', help='location of model checkpoints')
 
     # forecasting task
     parser.add_argument('--seq_len', type=int, default=time_point_step, help='input sequence length')
