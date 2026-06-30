@@ -7,7 +7,7 @@ from SQTool.log_utils import get_logger
 log = get_logger("TSLQ.Run_prd_win")
 
 
-def run(strategy_name):
+def run(strategy_name, assetsMarket='A', timeLevel='d'):
     """
     注意：
         为了给不同策略实盘分配不同文件夹，而我懒得再给仓位对象加入策略名属性，因此，
@@ -29,7 +29,7 @@ def run(strategy_name):
         feature_plan_name = 'feature_tea_radical_nature'
         classification = 2
 
-    name = 'A_d'
+    name = assetsMarket + '_' + timeLevel
     time_point_step = '160'
     model_name = 'TimesNet'  # ClassCNN  ClassLSTM  Informer Nonstationary_Transformer
     model_id = name + '_' + model_name + '_' + strategy_name  # 区别不同训练系数  a800_60_market  A_15_tea  A_d_pred
@@ -63,7 +63,19 @@ def seconds_until(target_hour, target_minute):
     return (target - now).seconds
 
 
-def run_prd():
+def run_A():
+    log.info(datetime.now().strftime("%Y-%m-%d") + "运行fuzzy_ma")
+    run("fuzzy_ma")
+    # 涉及 position、inference_live、trade_point_live_inference_fuzzy_ma
+    log.info(datetime.now().strftime("%Y-%m-%d") + "运行fuzzy_ma完成")
+    sleep(10)
+    log.info(datetime.now().strftime("%Y-%m-%d") + "运行tea_radical_nature")
+    run("tea_radical_nature")
+    # 涉及 position、inference_live、trade_point_live_inference_tea_radical_nature
+    log.info(datetime.now().strftime("%Y-%m-%d") + "运行tea_radical_nature完成")
+
+
+def run_A_prd():
     while True:
         # 只能交易日的0~9:30之间，或交易日15~0之间，手动启
         workday_list = SQTool.read_config("SQT", "QuantData_path") + "workday_list.csv"
@@ -97,14 +109,8 @@ if __name__ == '__main__':
     rrentOrders_fuzzy_ma、position_currentOrders_tea_radical_nature刚买入的持仓信息删除
     prediction_live_fuzzy_ma、prediction_live_tea_radical_nature实盘预测文件删除
     """
-    # run_prd()
-    log.info(datetime.now().strftime("%Y-%m-%d") + "运行fuzzy_ma")
-    run("fuzzy_ma")
-    # 涉及 position、inference_live、trade_point_live_inference_fuzzy_ma
-    log.info(datetime.now().strftime("%Y-%m-%d") + "运行fuzzy_ma完成")
-    sleep(10)
-    log.info(datetime.now().strftime("%Y-%m-%d") + "运行tea_radical_nature")
-    run("tea_radical_nature")
-    # 涉及 position、inference_live、trade_point_live_inference_tea_radical_nature
-    log.info(datetime.now().strftime("%Y-%m-%d") + "运行tea_radical_nature完成")
+    # run_A_prd()
+    run_A()
+    # run("fuzzy_ma", "USA")
+
 

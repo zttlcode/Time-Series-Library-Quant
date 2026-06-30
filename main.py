@@ -78,7 +78,7 @@ if __name__ == '__main__':
     #                     'buy')
 
     # 训练集组装完成，设置训练或推理参数
-    name = 'A_d'
+    name = 'USA_d'
     time_point_step = '160'
     handle_uneven_samples = 'True'
     strategy_name = 'fuzzy_ma'  # fuzzy_ma tea_radical_nature
@@ -115,14 +115,14 @@ if __name__ == '__main__':
     #                     classification,
     #                     classification_direction)  # 预测行情 True 是3分类预测行情  False 是4分类预测交易点
     # 实盘运行推理
-    run_quant.inference_live(name,
-                             time_point_step,
-                             strategy_name,
-                             feature_plan_name,
-                             model_id,
-                             model_name,
-                             classification,
-                             classification_direction)
+    # run_quant.inference_live(name,
+    #                          time_point_step,
+    #                          strategy_name,
+    #                          feature_plan_name,
+    #                          model_id,
+    #                          model_name,
+    #                          classification,
+    #                          classification_direction)
 
     """
     功能：时序模型数据处理
